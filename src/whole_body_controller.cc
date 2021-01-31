@@ -39,7 +39,7 @@ namespace whole_body_controller_ns {
 
   void WholeBodyController::update(const ros::Time &time, const ros::Duration &period)
   {
-    
+    joint_handles_[3].setCommand(50 * (1.0 - joint_handles_[3].getPosition()));
   }
 }
 
