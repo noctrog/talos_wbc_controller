@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(talos_qp_legs_controller)
+project(talos_wbc_controller)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)

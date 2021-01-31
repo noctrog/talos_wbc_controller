@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>talos_qp_legs_controller</name>
+  <name>talos_wbc_controller</name>
   <version>0.0.0</version>
   <description>The talos_qp_legs_controller package</description>
 
