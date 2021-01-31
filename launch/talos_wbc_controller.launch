@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+
+<launch>
+  <rosparam file="$(find talos_wbc_controller)/config/talos_wbc_controller.yaml" command="load" />
+  <node name="talos_wbc_controller_spawner" pkg="controller_manager" type="spawner" output="screen"
+	args="talos_wbc_controller"/>
+</launch>
