@@ -13,6 +13,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
 )
 
+find_package(Eigen3 REQUIRED)
+find_package(OsqpEigen REQUIRED)
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -117,6 +120,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   include
+  ${EIGEN3_INCLUDE_DIRS}
+  ${OSQPEIGEN_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -126,7 +131,7 @@ include_directories(
 # )
 
 add_library(talos_wbc_lib src/whole_body_controller.cc)
-target_link_libraries(talos_wbc_lib ${catkin_LIBRARIES})
+target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
