@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen3 REQUIRED)
 find_package(OsqpEigen REQUIRED)
+find_package(pinocchio REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -131,7 +132,7 @@ include_directories(
 # )
 
 add_library(talos_wbc_lib src/whole_body_controller.cc)
-target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${catkin_LIBRARIES})
+target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

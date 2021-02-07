@@ -1,11 +1,36 @@
+/**
+ *   \file whole_body_controller.cc
+ *   \brief Implementation of Talos Whole Body Controller 
+ */
+
+#include <ros/package.h>
 #include <talos_qp_legs_controller/whole_body_controller.h>
 #include <eigen3/Eigen/Eigen>
 #include <OsqpEigen/OsqpEigen.h>
+#include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/algorithm/crba.hpp>
+#include <pinocchio/algorithm/rnea.hpp>
 
 namespace whole_body_controller_ns {
 
   WholeBodyController::WholeBodyController()
   {
+    // Load robot model
+    ROS_INFO("Loading URDF model...");
+    std::string xpp_talos_path = ros::package::getPath("xpp_talos");
+    if (xpp_talos_path.size() == 0) {
+      ROS_ERROR("You need to install the xpp_talos package: https://github.com/noctrog/xpp_talos");
+      exit(-1);
+    }
+    std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2.urdf";
+    std::cout << urdf_path << std::endl;
+    // JointModelFreeFlyer indicates that the root of the robot is not fixed to the world
+    pinocchio::urdf::buildModel(urdf_path, pinocchio::JointModelFreeFlyer(), robot_model_);
+    ROS_INFO("Pinocchio model loaded success, robot name: %s", robot_model_.name.c_str());
+
+    // Initialize pinocchio model data
+    robot_data_ = pinocchio::Data(robot_model_);
+
     // Set matrix and variable sizes
     P_.resize(2,2);
     q_.resize(2);
@@ -68,6 +93,19 @@ namespace whole_body_controller_ns {
 
   void WholeBodyController::update(const ros::Time &time, const ros::Duration &period)
   {
+    // Get the current robot state
+    Eigen::VectorXd q; Eigen::VectorXd qd;
+    getRobotState(q, qd);
+
+    // Calculate the joint space inertia matrix and nonlinear effects
+    pinocchio::crba(robot_model_, robot_data_, q); // Only computes the upper triangular part
+    robot_data_.M.triangularView<Eigen::StrictlyLower>() =  // So it needs to be copied to the lower part
+      robot_data_.M.transpose().triangularView<Eigen::StrictlyLower>();
+    pinocchio::nonLinearEffects(robot_model_, robot_data_, q, qd);
+
+    std::cout << "Inercia: " << robot_data_.M << std::endl;
+    std::cout << "NLE: " << robot_data_.nle << std::endl;
+
     // Update the QP formulation from the current robot state
     updateQPFormulation();
 
@@ -161,6 +199,29 @@ namespace whole_body_controller_ns {
     if (not updateGradientMatrix()) std::runtime_error("Error computing the gradient matrix");
     if (not updateBounds()) std::runtime_error("Error computing the bounds");
     if (not updateLinearConstraints()) std::runtime_error("Error computing the linear constraint matrix");
+  }
+
+  void WholeBodyController::getRobotState(Eigen::VectorXd& q,
+					  Eigen::VectorXd& qd)
+  {
+    // Delete previous data
+    q.resize(19); qd.resize(18);
+
+    // TODO: Cartesian position and orientation (pos: xyz, rot: xyzw (cuaternion))
+    for (size_t i = 0; i < 7; ++i) {
+      q(i) = 0.0;
+    }
+
+    // TODO: Cartesian velocity and angular velocity (pos: xyz, rot: rpy)
+    for (size_t i = 0; i < 6; ++i) {
+      qd(i) = 0.0;
+    }
+
+    // Joint positions and velocities
+    for (size_t i = 7; i < 19; ++i) {
+      q(i) = joint_handles_.at(i-7).getPosition();
+      qd(i-1) = joint_handles_.at(i-7).getVelocity();
+    }
   }
 
 }

@@ -3,10 +3,15 @@
  *   \brief Header file for the Whole Body Controller.
  */
 
+#define BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS
+#define BOOST_MPL_LIMIT_LIST_SIZE 30
+
 #include <controller_interface/controller.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <pluginlib/class_list_macros.h>
 #include <OsqpEigen/Solver.hpp>
+#include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
 
 namespace whole_body_controller_ns {
 
@@ -59,6 +64,14 @@ private:
    *  Update the @ref A_ matrix according to the robot state.
    */
   bool updateLinearConstraints(void);
+
+  /**
+   * Gets the robot state (joint positions and velocities)
+   * TODO: cartesian position, vel and orientations
+   */
+  void
+  getRobotState(Eigen::VectorXd& q,
+		Eigen::VectorXd& qd);
   
   /// Handle for every controllable joint
   std::vector<hardware_interface::JointHandle> joint_handles_;
@@ -77,5 +90,10 @@ private:
   Eigen::VectorXd l_;
   /// Upper bound matrix
   Eigen::VectorXd u_;
+
+  /// Robot representation
+  pinocchio::Model robot_model_;
+  /// Robot data
+  pinocchio::Data robot_data_;
 };
 } // namespace whole_body_controller_ns
