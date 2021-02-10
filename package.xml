@@ -50,16 +50,19 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>controller_interface</build_depend>
+  <build_depend>joint_trajectory_controller</build_depend>
   <build_depend>pluginlib</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>osqp-eigen</build_depend>
   <build_depend>pinocchio</build_depend>
   <build_export_depend>controller_interface</build_export_depend>
+  <build_export_depend>joint_trajectory_controller</build_export_depend>
   <build_export_depend>pluginlib</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>osqp-eigen</build_export_depend>
   <build_export_depend>pinocchio</build_export_depend>
   <exec_depend>controller_interface</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>pluginlib</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>osqp-eigen</exec_depend>

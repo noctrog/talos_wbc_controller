@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+
+<launch>
+  <arg name="robot" default="full_v2" />
+  <arg name="ns" value="talos_trajectory_wbc_controller" />
+
+  <!--
+      If true, shutdown timeout for spawner is set to 1.0 due to this issue:
+      https://github.com/ros-controls/ros_control/issues/195
+  -->
+  <arg name="enable_unloading_workaround" default="false" />
+
+
+  <arg name="controllers" default="" /> <!-- override default controllers -->
+
+  <include file="$(find talos_controller_configuration)/launch/selective_rosparam_loader.launch">
+	<arg name="robot" value="$(arg robot)" />
+	<arg name="prefix" value="$(find talos_controller_configuration)/config/joint_trajectory_controllers/" />
+  </include>
+
+  <!-- <node name="body_controllers_spawner" -->
+  <!--     pkg="controller_manager" type="spawner" output="screen" -->
+  <!--     args="$(arg extra_args) $(arg controllers_to_load)" /> -->
+
+  <rosparam file="$(find talos_wbc_controller)/config/talos_trajectory_wbc_controller.yaml" command="load" />
+
+  <!-- Load hardware interface parameters in the controller namespace -->
+  <rosparam command="load" file="$(find talos_hardware_gazebo)/config/pids.yaml"
+	    ns="$(arg ns)" />
+
+  <node name="talos_trajectory_wbc_controller_spawner" pkg="controller_manager" type="spawner"
+	output="screen" args="talos_trajectory_wbc_controller"/>
+
+  <!-- Point head action -->
+  <!-- <group if="$(eval 'head' in arg('controllers_to_load'))" -->
+  <!--        ns="head_controller"> -->
+  <!--   <node name="point_head_action" pkg="head_action" type="head_action" output="screen" /> -->
+  <!-- </group> -->
+
+</launch>

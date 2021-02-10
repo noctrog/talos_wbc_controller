@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   controller_interface
   pluginlib
   roscpp
+  joint_trajectory_controller
 )
 
 find_package(Eigen3 REQUIRED)
@@ -131,7 +132,9 @@ include_directories(
 #   src/${PROJECT_NAME}/talos_qp_legs_controller.cpp
 # )
 
-add_library(talos_wbc_lib src/whole_body_controller.cc)
+add_library(talos_wbc_lib
+  src/whole_body_controller.cc
+  src/talos_wbc_joint_trajectory_controller.cc)
 target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
