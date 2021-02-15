@@ -4,7 +4,7 @@
 // Project
 #include <trajectory_interface/quintic_spline_segment.h>
 #include <joint_trajectory_controller/joint_trajectory_controller.h>
-#include <talos_qp_legs_controller/talos_wbc_joint_trajectory_controller.hpp>
+#include <talos_wbc_controller/talos_wbc_joint_trajectory_controller.hpp>
 
 namespace whole_body_controllers
 {

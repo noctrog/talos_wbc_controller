@@ -95,5 +95,11 @@ private:
   pinocchio::Model robot_model_;
   /// Robot data
   pinocchio::Data robot_data_;
+
+  /// Selection matrix (indicates which degrees of freedom are actuated)
+  Eigen::MatrixXd S_;
+
+  /// Receives the latest control command
+  ros::Subscriber subs_;
 };
 } // namespace whole_body_controller_ns
