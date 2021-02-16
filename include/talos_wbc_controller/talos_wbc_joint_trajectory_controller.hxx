@@ -4,98 +4,41 @@
 namespace joint_trajectory_controller
 {
 
-namespace internal
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+inline bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
+getContactsAtInstant(const TrajectoryPerJoint& curr_traj,
+		     const ContactPerJoint& curr_contact_traj,
+		     const typename Segment::Scalar& time)
 {
+  typedef typename Segment::Scalar Time;
+  typedef typename Trajectory::value_type::const_iterator TrajectoryIterator;
+  typedef typename std::iterator_traits<TrajectoryIterator>::value_type Segment;
 
-template <class Enclosure, class Member>
-inline boost::shared_ptr<Member> share_member(boost::shared_ptr<Enclosure> enclosure, Member &member)
-{
-  actionlib::EnclosureDeleter<Enclosure> d(enclosure);
-  boost::shared_ptr<Member> p(&member, d);
-  return p;
+  TrajectoryIterator first = curr_traj.begin();
+  TrajectoryIterator last = curr_traj.end();
+
+  // Get the corresponding iterator for the current segment of the trajectory
+  auto it =
+    (first == last || trajectory_interface::internal::isBeforeSegment(time, *first))
+	  ? last // Optimization when time preceeds all segments, or when an
+		 // empty range is passed
+	  : --std::upper_bound(
+		first, last, time,
+		trajectory_interface::internal::isBeforeSegment<Time, Segment>);
+
+  // Get the corresponding position of the contact sequence
+  size_t contact_id = 0;
+  if (it != last) {
+    // Segment found at specified time
+    contact_id = std::distance(first, it);
+  } else if (!curr_traj.empty()) {
+    // Specified time preceeds trajectory start time
+    contact_id = 0;
+  }
+
+  // Get the current contact
+  return curr_contact_traj.at(contact_id);
 }
-
-std::vector<std::string> getStrings(const ros::NodeHandle& nh, const std::string& param_name)
-{
-  using namespace XmlRpc;
-  XmlRpcValue xml_array;
-  if (!nh.getParam(param_name, xml_array))
-  {
-    ROS_ERROR_STREAM("Could not find '" << param_name << "' parameter (namespace: " << nh.getNamespace() << ").");
-    return std::vector<std::string>();
-  }
-  if (xml_array.getType() != XmlRpcValue::TypeArray)
-  {
-    ROS_ERROR_STREAM("The '" << param_name << "' parameter is not an array (namespace: " <<
-                     nh.getNamespace() << ").");
-    return std::vector<std::string>();
-  }
-
-  std::vector<std::string> out;
-  for (int i = 0; i < xml_array.size(); ++i)
-  {
-    if (xml_array[i].getType() != XmlRpcValue::TypeString)
-    {
-      ROS_ERROR_STREAM("The '" << param_name << "' parameter contains a non-string element (namespace: " <<
-                       nh.getNamespace() << ").");
-      return std::vector<std::string>();
-    }
-    out.push_back(static_cast<std::string>(xml_array[i]));
-  }
-  return out;
-}
-
-urdf::ModelSharedPtr getUrdf(const ros::NodeHandle& nh, const std::string& param_name)
-{
-  urdf::ModelSharedPtr urdf(new urdf::Model);
-
-  std::string urdf_str;
-  // Check for robot_description in proper namespace
-  if (nh.getParam(param_name, urdf_str))
-  {
-    if (!urdf->initString(urdf_str))
-    {
-      ROS_ERROR_STREAM("Failed to parse URDF contained in '" << param_name << "' parameter (namespace: " <<
-        nh.getNamespace() << ").");
-      return urdf::ModelSharedPtr();
-    }
-  }
-  // Check for robot_description in root
-  else if (!urdf->initParam("robot_description"))
-  {
-    ROS_ERROR_STREAM("Failed to parse URDF contained in '" << param_name << "' parameter");
-    return urdf::ModelSharedPtr();
-  }
-  return urdf;
-}
-
-std::vector<urdf::JointConstSharedPtr> getUrdfJoints(const urdf::Model& urdf, const std::vector<std::string>& joint_names)
-{
-  std::vector<urdf::JointConstSharedPtr> out;
-  for (unsigned int i = 0; i < joint_names.size(); ++i)
-  {
-    urdf::JointConstSharedPtr urdf_joint = urdf.getJoint(joint_names[i]);
-    if (urdf_joint)
-    {
-      out.push_back(urdf_joint);
-    }
-    else
-    {
-      ROS_ERROR_STREAM("Could not find joint '" << joint_names[i] << "' in URDF model.");
-      return std::vector<urdf::JointConstSharedPtr>();
-    }
-  }
-  return out;
-}
-
-std::string getLeafNamespace(const ros::NodeHandle& nh)
-{
-  const std::string complete_ns = nh.getNamespace();
-  std::size_t id   = complete_ns.find_last_of("/");
-  return complete_ns.substr(id + 1);
-}
-
-} // namespace
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 inline void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
@@ -126,7 +69,7 @@ stopping(const ros::Time& /*time*/)
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 inline void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
-trajectoryCommandCB(const JointTrajectoryConstPtr& msg)
+trajectoryCommandCB(const JointContactTrajectoryConstPtr& msg)
 {
   const bool update_ok = updateTrajectoryCommand(msg, RealtimeGoalHandlePtr());
   if (update_ok) {preemptActiveGoal();}
@@ -325,6 +268,9 @@ update(const ros::Time& time, const ros::Duration& period)
   TrajectoryPtr curr_traj_ptr;
   curr_trajectory_box_.get(curr_traj_ptr);
   Trajectory& curr_traj = *curr_traj_ptr;
+  ContactTrajectoryPtr curr_contact_traj_ptr;
+  curr_contact_trajectory_box_.get(curr_contact_traj_ptr);
+  ContactTrajectory& curr_contact_traj = *curr_contact_traj_ptr;
 
   // Update time data
   TimeData time_data;
@@ -341,12 +287,18 @@ update(const ros::Time& time, const ros::Duration& period)
   // fetch the currently followed trajectory, it has been updated by the non-rt thread with something that starts in the
   // next control cycle, leaving the current cycle without a valid trajectory.
 
+  // Store contacts
+  std::vector<bool> curr_contacts(joints_.size());
+
   // Update current state and state error
   for (unsigned int i = 0; i < joints_.size(); ++i)
   {
     current_state_.position[i] = joints_[i].getPosition();
     current_state_.velocity[i] = joints_[i].getVelocity();
     // There's no acceleration data available in a joint handle
+
+    // Get contact for current joint at current time
+    curr_contacts[i] = getContactsAtInstant(curr_traj[i], curr_contact_traj[i], time_data.uptime.toSec());
 
     typename TrajectoryPerJoint::const_iterator segment_it = sample(curr_traj[i], time_data.uptime.toSec(), desired_joint_state_);
     if (curr_traj[i].end() == segment_it)
@@ -442,6 +394,7 @@ update(const ros::Time& time, const ros::Duration& period)
     }
   }
 
+
   //If there is an active goal and all segments finished successfully then set goal as succeeded
   RealtimeGoalHandlePtr current_active_goal(rt_active_goal_);
   if (current_active_goal && current_active_goal->preallocated_result_ && successful_joint_traj_.count() == joints_.size())
@@ -452,7 +405,9 @@ update(const ros::Time& time, const ros::Duration& period)
     successful_joint_traj_.reset();
   }
 
-  // Hardware interface adapter: Generate and send commands
+  // TODO Solve QP problem
+
+  // TODO: Hardware interface adapter: send torque commands through acceleration
   hw_iface_adapter_.updateCommand(time_data.uptime, time_data.period,
                                   desired_state_, state_error_);
 
@@ -477,7 +432,7 @@ update(const ros::Time& time, const ros::Duration& period)
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
-updateTrajectoryCommand(const JointTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh)
+updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh)
 {
   typedef InitJointTrajectoryOptions<Trajectory> Options;
 
@@ -514,6 +469,8 @@ updateTrajectoryCommand(const JointTrajectoryConstPtr& msg, RealtimeGoalHandlePt
   // Trajectory initialization options
   TrajectoryPtr curr_traj_ptr;
   curr_trajectory_box_.get(curr_traj_ptr);
+  ContactTrajectoryPtr curr_cont_traj_ptr;
+  curr_contact_trajectory_box_.get(curr_cont_traj_ptr);
 
   Options options;
   options.other_time_base           = &next_update_uptime;
@@ -528,11 +485,13 @@ updateTrajectoryCommand(const JointTrajectoryConstPtr& msg, RealtimeGoalHandlePt
   try
   {
     TrajectoryPtr traj_ptr(new Trajectory);
-    // TODO: crear initJointTrajectory especifico
-    *traj_ptr = initJointTrajectory<Trajectory>(*msg, next_update_time, options);
+    ContactTrajectoryPtr cont_traj_ptr(new ContactTrajectory);
+    // TODO: crear initJointTrajectory especifico para los contactos
+    *traj_ptr = initJointTrajectory<Trajectory>(msg->trajectory, next_update_time, options);
     if (!traj_ptr->empty())
     {
       curr_trajectory_box_.set(traj_ptr);
+      curr_contact_trajectory_box_.set(cont_traj_ptr);
     }
     else
     {

@@ -47,6 +47,7 @@
 
 #include <talos_wbc_controller/JointContactTrajectory.h>
 #include <talos_wbc_controller/hardware_interface_direct_effort.hpp>
+#include <talos_wbc_controller/FollowContactJointTrajectoryAction.h>
 
 namespace joint_trajectory_controller
 {
@@ -135,12 +136,13 @@ private:
   typedef actionlib::ActionServer<control_msgs::FollowJointTrajectoryAction>                  ActionServer;
   typedef boost::shared_ptr<ActionServer>                                                     ActionServerPtr;
   typedef ActionServer::GoalHandle                                                            GoalHandle;
-  typedef realtime_tools::RealtimeServerGoalHandle<control_msgs::FollowJointTrajectoryAction> RealtimeGoalHandle;
+  typedef realtime_tools::RealtimeServerGoalHandle<talos_wbc_controller::FollowContactJointTrajectoryAction> RealtimeGoalHandle;
   typedef boost::shared_ptr<RealtimeGoalHandle>                                               RealtimeGoalHandlePtr;
   typedef talos_wbc_controller::JointContactTrajectory::ConstPtr                              JointTrajectoryConstPtr;
   typedef realtime_tools::RealtimePublisher<control_msgs::JointTrajectoryControllerState>     StatePublisher;
   typedef boost::scoped_ptr<StatePublisher>                                                   StatePublisherPtr;
 
+  // Data types related to the continuous trajectory
   typedef JointTrajectorySegment<SegmentImpl> Segment;
   typedef std::vector<Segment> TrajectoryPerJoint;
   typedef std::vector<TrajectoryPerJoint> Trajectory;
@@ -148,6 +150,13 @@ private:
   typedef boost::shared_ptr<TrajectoryPerJoint> TrajectoryPerJointPtr;
   typedef realtime_tools::RealtimeBox<TrajectoryPtr> TrajectoryBox;
   typedef typename Segment::Scalar Scalar;
+
+  // Data types related to the contact sequence
+  typedef std::vector<bool> ContactPerJoint;     ///< counter part to TrajectoryPerJoint
+  typedef std::vector<ContactPerJoint> ContactTrajectory; ///< counter part to ContactTrajectory
+  typedef boost::shared_ptr<ContactTrajectory> ContactTrajectoryPtr;
+  typedef boost::shared_ptr<ContactPerJoint> ContactPerJointPtr;
+  typedef realtime_tools::RealtimeBox<ContactTrajectoryPtr> ContactTrajectoryBox;
 
   typedef DirectEffortHardwareInterfaceAdapter<typename Segment::State> HwIfaceAdapter;
   typedef typename HardwareInterface::ResourceHandleType JointHandle;
@@ -171,6 +180,9 @@ private:
    */
   TrajectoryBox curr_trajectory_box_;
   TrajectoryPtr hold_trajectory_ptr_; ///< Last hold trajectory values.
+
+  ContactTrajectoryBox curr_contact_trajectory_box_;
+  ContactTrajectoryPtr hold_contact_trajectory_ptr_;
 
   typename Segment::State current_state_;         ///< Preallocated workspace variable.
   typename Segment::State desired_state_;         ///< Preallocated workspace variable.
@@ -197,8 +209,11 @@ private:
   ros::Timer         goal_handle_timer_;
   ros::Time          last_state_publish_time_;
 
-  bool updateTrajectoryCommand(const JointTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh);
-  void trajectoryCommandCB(const JointTrajectoryConstPtr& msg);
+  typedef talos_wbc_controller::JointContactTrajectory JointContactTrajectory;
+  typedef JointContactTrajectory::ConstPtr JointContactTrajectoryConstPtr;
+
+  bool updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh);
+  void trajectoryCommandCB(const JointContactTrajectoryConstPtr& msg);
   void goalCB(GoalHandle gh);
   void cancelCB(GoalHandle gh);
   void preemptActiveGoal();
@@ -221,10 +236,15 @@ private:
    */
   void setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh=RealtimeGoalHandlePtr());
 
+  bool
+  getContactsAtInstant(const TrajectoryPerJoint& curr_traj,
+		       const ContactPerJoint& curr_contact_traj,
+		       const typename Segment::Scalar &time);
+
 };
 
 } // namespace
 
-#include <joint_trajectory_controller/joint_trajectory_controller_impl.h>
+#include <talos_wbc_controller/talos_wbc_joint_trajectory_controller.hxx>
 
 #endif // header guard

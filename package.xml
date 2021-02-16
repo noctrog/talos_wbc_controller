@@ -13,7 +13,7 @@
   <!-- One license tag required, multiple allowed, one license per tag -->
   <!-- Commonly used license strings: -->
   <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
-  <license>TODO</license>
+  <license>GPLv3</license>
 
 
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
@@ -51,6 +51,10 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>controller_interface</build_depend>
   <build_depend>message_generation</build_depend>
+  <build_depend>actionlib_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>control_msgs</build_depend>
+  <build_depend>trajectory_msgs</build_depend>
   <build_depend>joint_trajectory_controller</build_depend>
   <build_depend>pluginlib</build_depend>
   <build_depend>roscpp</build_depend>
@@ -61,12 +65,18 @@
   <build_export_depend>pluginlib</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>osqp-eigen</build_export_depend>
+  <build_export_depend>actionlib_msgs</build_export_depend>
   <build_export_depend>pinocchio</build_export_depend>
   <exec_depend>controller_interface</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>pluginlib</exec_depend>
   <exec_depend>roscpp</exec_depend>
+  <exec_depend>message_generation</exec_depend>
+  <exec_depend>actionlib_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>osqp-eigen</exec_depend>
   <exec_depend>pinocchio</exec_depend>
 

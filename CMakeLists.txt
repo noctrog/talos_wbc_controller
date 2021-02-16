@@ -10,13 +10,16 @@ project(talos_wbc_controller)
 find_package(catkin REQUIRED COMPONENTS
   controller_interface
   pluginlib
-  roscpp
   joint_trajectory_controller
-  message_generation
   std_msgs
+  actionlib_msgs
   trajectory_msgs
+  control_msgs
+  message_generation
+  roscpp
 )
 
+find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
 find_package(OsqpEigen REQUIRED)
 find_package(pinocchio REQUIRED)
@@ -69,15 +72,13 @@ add_message_files(
 # )
 
 ## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
+add_action_files(
+  FILES FollowContactJointTrajectory.action
+)
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
-  DEPENDENCIES std_msgs trajectory_msgs
+  DEPENDENCIES actionlib_msgs std_msgs trajectory_msgs control_msgs
 )
 
 ################################################
@@ -110,11 +111,10 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES talos_qp_legs_controller
-#  CATKIN_DEPENDS controller_interface pluginlib roscpp
-#  DEPENDS system_lib
-  CATKIN_DEPENDS message_runtime
+  INCLUDE_DIRS include
+#  LIBRARIES talos_wbc_controller
+  DEPENDS Boost
+  CATKIN_DEPENDS actionlib_msgs std_msgs roscpp message_runtime
 )
 
 ###########
@@ -132,13 +132,15 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/talos_qp_legs_controller.cpp
+#   src/${PROJECT_NAME}/talos_wbc_controller.cpp
 # )
 
 add_library(talos_wbc_lib
   src/whole_body_controller.cc
   src/talos_wbc_joint_trajectory_controller.cc)
-target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
+add_dependencies(talos_wbc_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(talos_wbc_lib
+  OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -148,7 +150,7 @@ target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/talos_qp_legs_controller_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/talos_wbc_controller_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -212,7 +214,7 @@ target_link_libraries(talos_wbc_lib OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} 
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_talos_qp_legs_controller.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_talos_wbc_controller.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

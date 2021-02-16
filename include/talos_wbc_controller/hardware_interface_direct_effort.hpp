@@ -56,7 +56,8 @@ public:
 
     // Update efforts
     for (size_t i = 0; i < n_joints; ++i) {
-      const double command = desired_state.effort[i];
+      // TODO something cleaner than using acceleration as effort
+      const double command = desired_state.acceleration[i];
       (*joint_handles_ptr_)[i].setCommand(command);
     }
   }
