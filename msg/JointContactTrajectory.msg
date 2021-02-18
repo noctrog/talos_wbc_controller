@@ -1,4 +1,4 @@
 Header header
 trajectory_msgs/JointTrajectory trajectory
-string[] contact_joint_names
+string[] contact_link_names
 JointContactTrajectoryContacts[] contacts
