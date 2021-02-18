@@ -19,7 +19,6 @@
 #include <urdf/model.h>
 
 // ROS messages
-#include <control_msgs/FollowJointTrajectoryAction.h>
 #include <control_msgs/JointTrajectoryControllerState.h>
 #include <control_msgs/QueryTrajectoryState.h>
 #include <trajectory_msgs/JointTrajectory.h>
@@ -41,10 +40,10 @@
 // Project
 #include <trajectory_interface/trajectory_interface.h>
 
-#include <joint_trajectory_controller/joint_trajectory_segment.h>
-#include <joint_trajectory_controller/init_joint_trajectory.h>
+#include <talos_wbc_controller/init_contact_joint_trajectory.hpp>
 #include <joint_trajectory_controller/hardware_interface_adapter.h>
 
+#include <talos_wbc_controller/contact_joint_trajectory_segment.hpp>
 #include <talos_wbc_controller/JointContactTrajectory.h>
 #include <talos_wbc_controller/hardware_interface_direct_effort.hpp>
 #include <talos_wbc_controller/FollowContactJointTrajectoryAction.h>
@@ -133,7 +132,7 @@ private:
     ros::Time     uptime; ///< Controller uptime. Set to zero at every restart.
   };
 
-  typedef actionlib::ActionServer<control_msgs::FollowJointTrajectoryAction>                  ActionServer;
+  typedef actionlib::ActionServer<talos_wbc_controller::FollowContactJointTrajectoryAction>                  ActionServer;
   typedef boost::shared_ptr<ActionServer>                                                     ActionServerPtr;
   typedef ActionServer::GoalHandle                                                            GoalHandle;
   typedef realtime_tools::RealtimeServerGoalHandle<talos_wbc_controller::FollowContactJointTrajectoryAction> RealtimeGoalHandle;
@@ -143,7 +142,7 @@ private:
   typedef boost::scoped_ptr<StatePublisher>                                                   StatePublisherPtr;
 
   // Data types related to the continuous trajectory
-  typedef JointTrajectorySegment<SegmentImpl> Segment;
+  typedef ContactJointTrajectorySegment<SegmentImpl> Segment;
   typedef std::vector<Segment> TrajectoryPerJoint;
   typedef std::vector<TrajectoryPerJoint> Trajectory;
   typedef boost::shared_ptr<Trajectory> TrajectoryPtr;

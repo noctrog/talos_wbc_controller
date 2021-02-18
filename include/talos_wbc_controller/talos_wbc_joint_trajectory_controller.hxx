@@ -340,7 +340,7 @@ update(const ros::Time& time, const ros::Duration& period)
           if(rt_segment_goal && rt_segment_goal->preallocated_result_)
           {
             rt_segment_goal->preallocated_result_->error_code =
-            control_msgs::FollowJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
+	      talos_wbc_controller::FollowContactJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
             rt_segment_goal->setAborted(rt_segment_goal->preallocated_result_);
             rt_active_goal_.reset();
             successful_joint_traj_.reset();
@@ -380,7 +380,7 @@ update(const ros::Time& time, const ros::Duration& period)
           }
 
           if(rt_segment_goal){
-            rt_segment_goal->preallocated_result_->error_code = control_msgs::FollowJointTrajectoryResult::GOAL_TOLERANCE_VIOLATED;
+            rt_segment_goal->preallocated_result_->error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::GOAL_TOLERANCE_VIOLATED;
             rt_segment_goal->setAborted(rt_segment_goal->preallocated_result_);
           }
           else
@@ -399,7 +399,7 @@ update(const ros::Time& time, const ros::Duration& period)
   RealtimeGoalHandlePtr current_active_goal(rt_active_goal_);
   if (current_active_goal && current_active_goal->preallocated_result_ && successful_joint_traj_.count() == joints_.size())
   {
-    current_active_goal->preallocated_result_->error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
+    current_active_goal->preallocated_result_->error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::SUCCESSFUL;
     current_active_goal->setSucceeded(current_active_goal->preallocated_result_);
     rt_active_goal_.reset();
     successful_joint_traj_.reset();
@@ -434,7 +434,7 @@ template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
 updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh)
 {
-  typedef InitJointTrajectoryOptions<Trajectory> Options;
+  typedef InitContactJointTrajectoryOptions<Trajectory> Options;
 
   // Preconditions
   if (!this->isRunning())
@@ -486,8 +486,7 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
   {
     TrajectoryPtr traj_ptr(new Trajectory);
     ContactTrajectoryPtr cont_traj_ptr(new ContactTrajectory);
-    // TODO: crear initJointTrajectory especifico para los contactos
-    *traj_ptr = initJointTrajectory<Trajectory>(msg->trajectory, next_update_time, options);
+    *traj_ptr = initContactJointTrajectory<Trajectory>(*msg, next_update_time, options);
     if (!traj_ptr->empty())
     {
       curr_trajectory_box_.set(traj_ptr);
@@ -523,8 +522,8 @@ goalCB(GoalHandle gh)
   if (!this->isRunning())
   {
     ROS_ERROR_NAMED(name_, "Can't accept new action goals. Controller is not running.");
-    control_msgs::FollowJointTrajectoryResult result;
-    result.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_GOAL; // TODO: Add better error status to msg?
+    talos_wbc_controller::FollowContactJointTrajectoryResult result;
+    result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_GOAL;
     gh.setRejected(result);
     return;
   }
@@ -532,11 +531,11 @@ goalCB(GoalHandle gh)
   // If partial joints goals are not allowed, goal should specify all controller joints
   if (!allow_partial_joints_goal_)
   {
-    if (gh.getGoal()->trajectory.joint_names.size() != joint_names_.size())
+    if (gh.getGoal()->trajectory.trajectory.joint_names.size() != joint_names_.size())
     {
       ROS_ERROR_NAMED(name_, "Joints on incoming goal don't match the controller joints.");
-      control_msgs::FollowJointTrajectoryResult result;
-      result.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_JOINTS;
+      talos_wbc_controller::FollowContactJointTrajectoryResult result;
+      result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_JOINTS;
       gh.setRejected(result);
       return;
     }
@@ -544,13 +543,13 @@ goalCB(GoalHandle gh)
 
   // Goal should specify valid controller joints (they can be ordered differently). Reject if this is not the case
   using internal::mapping;
-  std::vector<unsigned int> mapping_vector = mapping(gh.getGoal()->trajectory.joint_names, joint_names_);
+  std::vector<unsigned int> mapping_vector = mapping(gh.getGoal()->trajectory.trajectory.joint_names, joint_names_);
 
   if (mapping_vector.empty())
   {
     ROS_ERROR_NAMED(name_, "Joints on incoming goal don't match the controller joints.");
-    control_msgs::FollowJointTrajectoryResult result;
-    result.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_JOINTS;
+    talos_wbc_controller::FollowContactJointTrajectoryResult result;
+    result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_JOINTS;
     gh.setRejected(result);
     return;
   }
@@ -580,8 +579,8 @@ goalCB(GoalHandle gh)
   else
   {
     // Reject invalid goal
-    control_msgs::FollowJointTrajectoryResult result;
-    result.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    talos_wbc_controller::FollowContactJointTrajectoryResult result;
+    result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_GOAL;
     gh.setRejected(result);
   }
 }
