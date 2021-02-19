@@ -44,6 +44,7 @@
 #include <joint_trajectory_controller/hardware_interface_adapter.h>
 
 #include <talos_wbc_controller/contact_joint_trajectory_segment.hpp>
+#include <talos_wbc_controller/contact_segment.hpp>
 #include <talos_wbc_controller/JointContactTrajectory.h>
 #include <talos_wbc_controller/hardware_interface_direct_effort.hpp>
 #include <talos_wbc_controller/FollowContactJointTrajectoryAction.h>
@@ -151,10 +152,10 @@ private:
   typedef typename Segment::Scalar Scalar;
 
   // Data types related to the contact sequence
-  typedef std::vector<bool> ContactPerJoint;     ///< counter part to TrajectoryPerJoint
-  typedef std::vector<ContactPerJoint> ContactTrajectory; ///< counter part to ContactTrajectory
+  typedef std::vector<ContactSegment> ContactPerLink;     ///< counter part to TrajectoryPerJoint
+  typedef std::vector<ContactPerLink> ContactTrajectory; ///< counter part to ContactTrajectory
   typedef boost::shared_ptr<ContactTrajectory> ContactTrajectoryPtr;
-  typedef boost::shared_ptr<ContactPerJoint> ContactPerJointPtr;
+  typedef boost::shared_ptr<ContactPerLink> ContactPerLinkPtr;
   typedef realtime_tools::RealtimeBox<ContactTrajectoryPtr> ContactTrajectoryBox;
 
   typedef DirectEffortHardwareInterfaceAdapter<typename Segment::State> HwIfaceAdapter;
@@ -165,6 +166,7 @@ private:
   std::vector<JointHandle>  joints_;             ///< Handles to controlled joints.
   std::vector<bool>         angle_wraparound_;   ///< Whether controlled joints wrap around or not.
   std::vector<std::string>  joint_names_;        ///< Controlled joint names.
+  std::vector<std::string>  contact_link_names_; ///< Names of links that can have contacts
   SegmentTolerances<Scalar> default_tolerances_; ///< Default trajectory segment tolerances.
   HwIfaceAdapter            hw_iface_adapter_;   ///< Adapts desired trajectory state to HW interface.
 
@@ -236,8 +238,7 @@ private:
   void setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh=RealtimeGoalHandlePtr());
 
   bool
-  getContactsAtInstant(const TrajectoryPerJoint& curr_traj,
-		       const ContactPerJoint& curr_contact_traj,
+  getContactsAtInstant(const ContactPerLink& curr_contact_traj,
 		       const typename Segment::Scalar &time);
 
 };

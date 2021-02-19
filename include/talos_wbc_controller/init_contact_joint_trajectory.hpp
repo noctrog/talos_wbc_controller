@@ -23,6 +23,7 @@
 // Project
 #include <joint_trajectory_controller/joint_trajectory_msg_utils.h>
 #include <talos_wbc_controller/contact_joint_trajectory_segment.hpp>
+#include <talos_wbc_controller/contact_segment.hpp>
 
 namespace joint_trajectory_controller
 {
@@ -57,6 +58,7 @@ inline std::vector<unsigned int> mapping(const T& t1, const T& t2)
   }
   return mapping_vector;
 }
+
 }
 
 } // namespace
@@ -109,17 +111,19 @@ void updateSegmentTolerances(const talos_wbc_controller::FollowContactJointTraje
  * \brief Options used when initializing a joint trajectory from ROS message data.
  * \sa initJointTrajectory
  */
-template <class Trajectory>
+template <class Trajectory, class ContactTrajectory>
 struct InitContactJointTrajectoryOptions
 {
   typedef realtime_tools::RealtimeServerGoalHandle<talos_wbc_controller::FollowContactJointTrajectoryAction> RealtimeGoalHandle;
-  typedef boost::shared_ptr<RealtimeGoalHandle>                                               RealtimeGoalHandlePtr;
-  typedef typename Trajectory::value_type                                                     TrajectoryPerJoint;
-  typedef typename TrajectoryPerJoint::value_type                                             Segment;
-  typedef typename Segment::Scalar                                                            Scalar;
+  typedef boost::shared_ptr<RealtimeGoalHandle>      RealtimeGoalHandlePtr;
+  typedef typename Trajectory::value_type            TrajectoryPerJoint;
+  typedef typename TrajectoryPerJoint::value_type    Segment;
+  typedef typename ContactTrajectory::value_type     ContactPerLink;
+  typedef typename Segment::Scalar                   Scalar;
 
   InitContactJointTrajectoryOptions()
     : current_trajectory(0),
+      current_contact_trajectory(0),
       joint_names(0),
       angle_wraparound(0),
       rt_goal_handle(),
@@ -129,6 +133,7 @@ struct InitContactJointTrajectoryOptions
   {}
 
   Trajectory*                current_trajectory;
+  ContactTrajectory*         current_contact_trajectory;
   std::vector<std::string>*  joint_names;
   std::vector<bool>*         angle_wraparound;
   RealtimeGoalHandlePtr      rt_goal_handle;
@@ -208,16 +213,20 @@ bool isNotEmpty(typename Trajectory::value_type trajPerJoint)
  * In such a case, this method should be wrapped inside a \p try block.
  */
 // TODO: Return useful bits of current trajectory if input msg is useless?
-template <class Trajectory>
-Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& msg,
-				      const ros::Time& time,
-				      const InitContactJointTrajectoryOptions<Trajectory>& options =
-				      InitContactJointTrajectoryOptions<Trajectory>())
+template <class Trajectory, class ContactTrajectory>
+void
+initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& msg,
+			   const ros::Time& time,
+			   Trajectory& out_traj,
+			   ContactTrajectory& out_contact_traj,
+			   const InitContactJointTrajectoryOptions<Trajectory, ContactTrajectory>& options =
+			   InitContactJointTrajectoryOptions<Trajectory, ContactTrajectory>())
 {
   typedef typename Trajectory::value_type TrajectoryPerJoint;
   typedef typename TrajectoryPerJoint::value_type Segment;
   typedef typename Segment::Scalar Scalar;
   typedef typename TrajectoryPerJoint::const_iterator TrajIter;
+  typedef typename ContactTrajectory::value_type     ContactPerLink;
 
   const unsigned int n_joints = msg.trajectory.joint_names.size();
 
@@ -230,14 +239,18 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
   if (msg.trajectory.points.empty())
   {
     ROS_DEBUG("Trajectory message contains empty trajectory. Nothing to convert.");
-    return Trajectory();
+    out_traj = Trajectory();
+    out_contact_traj = ContactTrajectory();
+    return;
   }
 
   // Non strictly-monotonic waypoints
   if (!isTimeStrictlyIncreasing(msg.trajectory))
   {
     ROS_ERROR("Trajectory message contains waypoints that are not strictly increasing in time.");
-    return Trajectory();
+    out_traj = Trajectory();
+    out_contact_traj = ContactTrajectory();
+    return;
   }
 
   // Validate options
@@ -281,7 +294,9 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
     {
       ROS_ERROR("Cannot create trajectory from message. "
                 "Vector specifying whether joints wrap around has an invalid size.");
-      return Trajectory();
+      out_traj = Trajectory();
+      out_contact_traj = ContactTrajectory();
+      return;
     }
   }
 
@@ -291,7 +306,9 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
     if (msg.trajectory.joint_names.size() != joint_names.size())
     {
       ROS_ERROR("Cannot create trajectory from message. It does not contain the expected joints.");
-      return Trajectory();
+      out_traj = Trajectory();
+      out_contact_traj = ContactTrajectory();
+      return;
     }
   }
 
@@ -302,7 +319,9 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
   if (mapping_vector.empty())
   {
     ROS_ERROR("Cannot create trajectory from message. It does not contain the expected joints.");
-    return Trajectory();
+    out_traj = Trajectory();
+    out_contact_traj = ContactTrajectory();
+    return;
   }
 
   // Tolerances to be used in all new segments
@@ -333,10 +352,10 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
                       " trajectory point(s), as they occur before the current time.\n" <<
                       "Last point is " << std::fixed << std::setprecision(3) << last_point_dur.toSec() <<
                       "s in the past.");
-      return Trajectory();
-    }
-    else
-    {
+      out_traj = Trajectory();
+      out_contact_traj = ContactTrajectory();
+      return;
+    } else {
       ros::Duration next_point_dur = msg_start_time + msg_it->time_from_start - time;
       ROS_WARN_STREAM("Dropping first " << std::distance(msg.trajectory.points.begin(), msg_it) <<
                       " trajectory point(s) out of " << msg.trajectory.points.size() <<
@@ -346,15 +365,21 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
     }
   }
 
+  // Find the first contacts of the new trajectory occurring after current time
+  std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator contact_msg_it =
+    msg.contacts.begin() + std::distance(msg.trajectory.points.begin(), msg_it);
+
   // Initialize result trajectory: combination of:
   // - Useful segments of currently followed trajectory
   // - Useful segments of new trajectory (contained in ROS message)
   Trajectory result_traj; // Currently empty
+  ContactTrajectory result_contact_traj;
 
   // Set active goal to segments after current time
   if (has_current_trajectory)
   {
     result_traj = *(options.current_trajectory);
+    result_contact_traj = *(options.current_contact_trajectory);
 
     //Iterate to all segments after current time to set the new goal handler
     for (unsigned int joint_id=0; joint_id < joint_names.size();joint_id++)
@@ -369,11 +394,66 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
       }
     }
   }
-  else
+  else {
     result_traj.resize(joint_names.size());
+    result_contact_traj.resize(msg.contact_link_names.size());
+  }
 
-  //Iterate through the joints that are in the message, in the order of the mapping vector
-  //for (unsigned int joint_id=0; joint_id < joint_names.size();joint_id++)
+  // If there are a different number of possible contacts, we need to resize the trajectory
+  if (msg.contact_link_names.size() !=
+      options.current_contact_trajectory->size()) {
+
+    options.current_contact_trajectory->resize(msg.contact_link_names.size());
+
+    // Moreover, if now there are more contact links than before, we need to fill the past contacts
+    if (msg.contact_link_names.size() > options.current_contact_trajectory->size()) {
+      for (size_t j = options.current_contact_trajectory->size();
+	   j < msg.contact_link_names.size(); ++j) {
+	// Dirty but werks
+        options.current_contact_trajectory->at(j).resize(options.current_contact_trajectory->at(0).size());
+      }
+    }
+  }
+
+  // Iterate through the contact links in the message and retrieve them
+  for (unsigned int msg_link_it = 0; msg_link_it < msg.contact_link_names.size(); msg_link_it++) {
+    std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator it = contact_msg_it;
+
+    // Bridge current trajectory to new one (the bridge has the same value as the previous trajectory)
+    if (has_current_trajectory) {
+      typedef typename ContactPerLink::const_iterator ContactPerLinkIterator;
+      const ContactPerLink& curr_contact_traj = (*options.current_contact_trajectory)[msg_link_it];
+
+      // Get the last time and state that will be executed from the current trajectory
+      const typename Segment::Time last_curr_time = std::max(o_msg_start_time.toSec(), o_time.toSec());
+      // Get the current contact segment
+      auto isBeforeContactSegment =
+	  [](const ContactSegment::Time &time,
+	     const ContactSegment &segment) {
+	    return time < segment.getTime();
+          };
+      ContactPerLinkIterator contact_first = curr_contact_traj.begin();
+      ContactPerLinkIterator contact_last = curr_contact_traj.end();
+      ContactPerLinkIterator curr_contact_segment =
+	  (contact_first == contact_last ||
+	   isBeforeContactSegment(last_curr_time, *contact_first))
+	      ? contact_last
+	      : --std::upper_bound(contact_first, contact_last, last_curr_time,
+                                   isBeforeContactSegment);
+      // The next contact state remains equal to the actual contact state
+      ContactSegment bridge = *curr_contact_segment;
+      // Append bridge 
+      result_contact_traj.at(msg_link_it).push_back(bridge);
+    }
+
+    // TODO: Append the rest of the contact state (last contact is not
+    // appended because is the right end of the last segment)
+    
+  }
+
+  // Iterate through the joints that are in the message, in the order of the
+  // mapping vector for (unsigned int joint_id=0; joint_id <
+  // joint_names.size();joint_id++)
   for (unsigned int msg_joint_it=0; msg_joint_it < mapping_vector.size();msg_joint_it++)
   {
     std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator it = msg_it;
@@ -430,7 +510,9 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
         if (first == curr_joint_traj.end() || last == curr_joint_traj.end())
         {
           ROS_ERROR("Unexpected error: Could not find segments in current trajectory. Please contact the package maintainer.");
-          return Trajectory();
+	  out_traj = Trajectory();
+	  out_contact_traj = ContactTrajectory();
+	  return;
         }
         result_traj_per_joint.insert(result_traj_per_joint.begin(), first, ++last); // Range [first,last) will still be executed
       }
@@ -502,9 +584,12 @@ Trajectory initContactJointTrajectory(const talos_wbc_controller::JointContactTr
   if (trajIter == result_traj.end())
   {
     result_traj.clear();
+    result_contact_traj.clear();
   }
 
-  return result_traj;
+  out_traj = result_traj;
+  out_contact_traj = result_contact_traj;
+  return;
 }
 
 } // namespace

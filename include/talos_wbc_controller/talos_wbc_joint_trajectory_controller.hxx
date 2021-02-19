@@ -6,38 +6,33 @@ namespace joint_trajectory_controller
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 inline bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
-getContactsAtInstant(const TrajectoryPerJoint& curr_traj,
-		     const ContactPerJoint& curr_contact_traj,
+getContactsAtInstant(const ContactPerLink& curr_traj,
 		     const typename Segment::Scalar& time)
 {
   typedef typename Segment::Scalar Time;
-  typedef typename Trajectory::value_type::const_iterator TrajectoryIterator;
-  typedef typename std::iterator_traits<TrajectoryIterator>::value_type Segment;
+  typedef typename ContactPerLink::const_iterator SegmentIterator;
+  typedef typename std::iterator_traits<SegmentIterator>::value_type Segment;
 
-  TrajectoryIterator first = curr_traj.begin();
-  TrajectoryIterator last = curr_traj.end();
+  SegmentIterator first = curr_traj.begin();
+  SegmentIterator last = curr_traj.end();
+
+  auto isBeforeSegment = [](const Time& time, const Segment& segment){return time < segment.getTime();};
 
   // Get the corresponding iterator for the current segment of the trajectory
-  auto it =
-    (first == last || trajectory_interface::internal::isBeforeSegment(time, *first))
-	  ? last // Optimization when time preceeds all segments, or when an
-		 // empty range is passed
-	  : --std::upper_bound(
-		first, last, time,
-		trajectory_interface::internal::isBeforeSegment<Time, Segment>);
+  SegmentIterator it =
+    (first == last || isBeforeSegment(time, *first))
+	  ? last // Optimization when time preceeds all segments, or when an empty range is passed
+	  : --std::upper_bound(first, last, time, isBeforeSegment);
 
   // Get the corresponding position of the contact sequence
   size_t contact_id = 0;
   if (it != last) {
     // Segment found at specified time
-    contact_id = std::distance(first, it);
+    return it->getContact();
   } else if (!curr_traj.empty()) {
     // Specified time preceeds trajectory start time
-    contact_id = 0;
+    return first->getContact();
   }
-
-  // Get the current contact
-  return curr_contact_traj.at(contact_id);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
@@ -287,8 +282,14 @@ update(const ros::Time& time, const ros::Duration& period)
   // fetch the currently followed trajectory, it has been updated by the non-rt thread with something that starts in the
   // next control cycle, leaving the current cycle without a valid trajectory.
 
-  // Store contacts
-  std::vector<bool> curr_contacts(joints_.size());
+  // Sample current contacts
+  std::vector<ContactSegment> curr_contacts(contact_link_names_.size());
+
+  // Get contact for current joint at current time
+  for (size_t i = 0; i < curr_contacts.size(); ++i) {
+    bool bContact = getContactsAtInstant(curr_contact_traj[i], time_data.uptime.toSec());
+    curr_contacts.emplace_back(ContactSegment(bContact, time_data.uptime.toSec()));
+  }
 
   // Update current state and state error
   for (unsigned int i = 0; i < joints_.size(); ++i)
@@ -296,9 +297,6 @@ update(const ros::Time& time, const ros::Duration& period)
     current_state_.position[i] = joints_[i].getPosition();
     current_state_.velocity[i] = joints_[i].getVelocity();
     // There's no acceleration data available in a joint handle
-
-    // Get contact for current joint at current time
-    curr_contacts[i] = getContactsAtInstant(curr_traj[i], curr_contact_traj[i], time_data.uptime.toSec());
 
     typename TrajectoryPerJoint::const_iterator segment_it = sample(curr_traj[i], time_data.uptime.toSec(), desired_joint_state_);
     if (curr_traj[i].end() == segment_it)
@@ -434,7 +432,7 @@ template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
 updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalHandlePtr gh)
 {
-  typedef InitContactJointTrajectoryOptions<Trajectory> Options;
+  typedef InitContactJointTrajectoryOptions<Trajectory, ContactTrajectory> Options;
 
   // Preconditions
   if (!this->isRunning())
@@ -448,6 +446,9 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
     ROS_WARN_NAMED(name_, "Received null-pointer trajectory message, skipping.");
     return false;
   }
+
+  // Get contact link names
+  contact_link_names_ = msg->contact_link_names;
 
   // Time data
   TimeData* time_data = time_data_.readFromRT(); // TODO: Grrr, we need a lock-free data structure here!
@@ -473,20 +474,22 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
   curr_contact_trajectory_box_.get(curr_cont_traj_ptr);
 
   Options options;
-  options.other_time_base           = &next_update_uptime;
-  options.current_trajectory        = curr_traj_ptr.get();
-  options.joint_names               = &joint_names_;
-  options.angle_wraparound          = &angle_wraparound_;
-  options.rt_goal_handle            = gh;
-  options.default_tolerances        = &default_tolerances_;
-  options.allow_partial_joints_goal = allow_partial_joints_goal_;
+  options.other_time_base            = &next_update_uptime;
+  options.current_trajectory         = curr_traj_ptr.get();
+  options.current_contact_trajectory = curr_cont_traj_ptr.get();
+  options.joint_names                = &joint_names_;
+  options.angle_wraparound           = &angle_wraparound_;
+  options.rt_goal_handle             = gh;
+  options.default_tolerances         = &default_tolerances_;
+  options.allow_partial_joints_goal  = allow_partial_joints_goal_;
 
   // Update currently executing trajectory
   try
   {
     TrajectoryPtr traj_ptr(new Trajectory);
     ContactTrajectoryPtr cont_traj_ptr(new ContactTrajectory);
-    *traj_ptr = initContactJointTrajectory<Trajectory>(*msg, next_update_time, options);
+    initContactJointTrajectory<Trajectory, ContactTrajectory> (*msg, next_update_time,
+							       *traj_ptr, *cont_traj_ptr, options);
     if (!traj_ptr->empty())
     {
       curr_trajectory_box_.set(traj_ptr);
