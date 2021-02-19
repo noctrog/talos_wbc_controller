@@ -8,7 +8,7 @@ public:
 
   ContactSegment(void) : contacts(false), time_from_start(0.0){};
 
-  ContactSegment(Contact &_contacts, Time time)
+  ContactSegment(const Contact _contacts, const Time& time)
       : contacts(_contacts), time_from_start(time) {}
 
   ~ContactSegment() {}

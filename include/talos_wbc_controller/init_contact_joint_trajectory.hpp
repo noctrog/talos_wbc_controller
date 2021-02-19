@@ -150,6 +150,44 @@ bool isNotEmpty(typename Trajectory::value_type trajPerJoint)
 };
 }
 
+namespace internal {
+
+class IsBeforeContact
+{
+public:
+  IsBeforeContact(const ros::Time& msg_start_time) : msg_start_time_(msg_start_time) {}
+
+  bool operator()(const ros::Time& time, const talos_wbc_controller::JointContactTrajectoryContacts& point)
+  {
+    const ros::Time point_start_time = msg_start_time_ + point.time_from_start;
+    return time < point_start_time;
+  }
+
+private:
+  ros::Time msg_start_time_;
+};
+    
+}
+
+inline std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator
+findContact(const talos_wbc_controller::JointContactTrajectory& msg,
+	    const ros::Time& time)
+{
+  // Message trajectory start time
+  // If message time is == 0.0, the trajectory should start at the current time
+  const ros::Time msg_start_time = msg.header.stamp.isZero() ? time : msg.header.stamp;
+
+  internal::IsBeforeContact isBeforeContact(msg_start_time);
+
+  typedef std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator ConstIterator;
+  const ConstIterator first = msg.contacts.begin();
+  const ConstIterator last  = msg.contacts.end();
+
+  return (first == last || isBeforeContact(time, *first))
+         ? last // Optimization when time preceeds all segments, or when an empty range is passed
+         : --std::upper_bound(first, last, time, isBeforeContact); // Notice decrement operator
+}
+  
 /**
  * \brief Initialize a joint trajectory from ROS message data.
  *
@@ -417,39 +455,60 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
 
   // Iterate through the contact links in the message and retrieve them
   for (unsigned int msg_link_it = 0; msg_link_it < msg.contact_link_names.size(); msg_link_it++) {
+    typedef typename ContactPerLink::const_iterator ContactPerLinkIterator;
     std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator it = contact_msg_it;
+
+    // Get the current contact segment
+    auto isBeforeContactSegment = [](const ContactSegment::Time &time,
+				     const ContactSegment &segment) {
+      return time < segment.getTime();
+    };
+
+    // Get the iterator of the current segment
+    auto getCurrentContactSegment = [isBeforeContactSegment](const ContactPerLinkIterator& first,
+							     const ContactPerLinkIterator& last,
+							     const typename Segment::Time time) {
+      return (first == last || isBeforeContactSegment(time, *first))
+	? last
+	: --std::upper_bound(first, last, time,
+			     isBeforeContactSegment);
+    };
 
     // Bridge current trajectory to new one (the bridge has the same value as the previous trajectory)
     if (has_current_trajectory) {
-      typedef typename ContactPerLink::const_iterator ContactPerLinkIterator;
       const ContactPerLink& curr_contact_traj = (*options.current_contact_trajectory)[msg_link_it];
 
       // Get the last time and state that will be executed from the current trajectory
       const typename Segment::Time last_curr_time = std::max(o_msg_start_time.toSec(), o_time.toSec());
-      // Get the current contact segment
-      auto isBeforeContactSegment =
-	  [](const ContactSegment::Time &time,
-	     const ContactSegment &segment) {
-	    return time < segment.getTime();
-          };
       ContactPerLinkIterator contact_first = curr_contact_traj.begin();
       ContactPerLinkIterator contact_last = curr_contact_traj.end();
-      ContactPerLinkIterator curr_contact_segment =
-	  (contact_first == contact_last ||
-	   isBeforeContactSegment(last_curr_time, *contact_first))
-	      ? contact_last
-	      : --std::upper_bound(contact_first, contact_last, last_curr_time,
-                                   isBeforeContactSegment);
+      ContactPerLinkIterator curr_contact_segment = getCurrentContactSegment(contact_first, contact_last, last_curr_time);
       // The next contact state remains equal to the actual contact state
       ContactSegment bridge = *curr_contact_segment;
+
+      // Copy the useful previous trajectory
+      contact_first = getCurrentContactSegment(curr_contact_traj.begin(), curr_contact_traj.end(), o_time.toSec());   // Currently active segment
+      contact_last  = getCurrentContactSegment(curr_contact_traj.begin(), curr_contact_traj.end(), last_curr_time); // Segment active when new trajectory starts
+      result_contact_traj.at(msg_link_it).insert(result_contact_traj.at(msg_link_it).begin(),
+						 contact_first, ++contact_last);
+
       // Append bridge 
       result_contact_traj.at(msg_link_it).push_back(bridge);
     }
 
-    // TODO: Append the rest of the contact state (last contact is not
+    // Append the rest of the contact state (last contact is not
     // appended because is the right end of the last segment)
-    
+    std::vector<talos_wbc_controller::JointContactTrajectoryContacts>::const_iterator
+      msg_contacts_it = findContact(msg, time); // Points to last contact ocurring before the current time (NOTE: Using time, not o_time)
+    while (std::distance(msg_contacts_it, msg.contacts.end()) > 1) {
+      bool bContact = msg_contacts_it->contacts[msg_link_it];
+      ros::Duration t_time = msg_contacts_it->time_from_start;
+      result_contact_traj.at(msg_link_it).emplace_back(ContactSegment(bContact, t_time.toSec()));
+      msg_contacts_it++;
+    }
   }
+
+  // TODO: Show contact trajectory for debug purposes
 
   // Iterate through the joints that are in the message, in the order of the
   // mapping vector for (unsigned int joint_id=0; joint_id <
