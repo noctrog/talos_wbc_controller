@@ -92,7 +92,8 @@ template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
 JointTrajectoryWholeBodyController()
   : verbose_(false), // Set to true during debugging
-    hold_trajectory_ptr_(new Trajectory)
+    hold_trajectory_ptr_(new Trajectory),
+    hold_contact_trajectory_ptr_(new ContactTrajectory)
 {
   // The verbose parameter is for advanced use as it breaks real-time safety
   // by enabling ROS logging services
@@ -282,14 +283,19 @@ update(const ros::Time& time, const ros::Duration& period)
   // fetch the currently followed trajectory, it has been updated by the non-rt thread with something that starts in the
   // next control cycle, leaving the current cycle without a valid trajectory.
 
-  // Sample current contacts
+  // Debug
+  // ROS_INFO("update(): se tienen %d contactos. Sin embargo se tienen %d links",
+	   // curr_contact_traj.size(), contact_link_names_.size());
+  // Sample current contacts if there is any contact trajectory
   std::vector<ContactSegment> curr_contacts(contact_link_names_.size());
-
-  // Get contact for current joint at current time
-  for (size_t i = 0; i < curr_contacts.size(); ++i) {
-    bool bContact = getContactsAtInstant(curr_contact_traj[i], time_data.uptime.toSec());
-    curr_contacts.emplace_back(ContactSegment(bContact, time_data.uptime.toSec()));
+  // Get contact for current joint at current time, if any
+  if (curr_contact_traj.size() > 0) {
+    for (size_t i = 0; i < curr_contact_traj.size(); ++i) {
+      bool bContact = getContactsAtInstant(curr_contact_traj[i], time_data.uptime.toSec());
+      curr_contacts.emplace_back(ContactSegment(bContact, time_data.uptime.toSec()));
+    }
   }
+
 
   // Update current state and state error
   for (unsigned int i = 0; i < joints_.size(); ++i)
@@ -733,6 +739,7 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
     (*hold_trajectory_ptr_)[i].front().setGoalHandle(gh);
   }
   curr_trajectory_box_.set(hold_trajectory_ptr_);
+  curr_contact_trajectory_box_.set(hold_contact_trajectory_ptr_);
 }
 
 } // namespace

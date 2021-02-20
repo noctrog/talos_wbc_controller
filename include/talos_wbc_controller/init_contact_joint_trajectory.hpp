@@ -483,6 +483,10 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
       ContactPerLinkIterator contact_first = curr_contact_traj.begin();
       ContactPerLinkIterator contact_last = curr_contact_traj.end();
       ContactPerLinkIterator curr_contact_segment = getCurrentContactSegment(contact_first, contact_last, last_curr_time);
+
+      // If current trajectory is empty, break
+      if (curr_contact_segment == contact_last) break;
+
       // The next contact state remains equal to the actual contact state
       ContactSegment bridge = *curr_contact_segment;
 
@@ -508,7 +512,17 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
     }
   }
 
-  // TODO: Show contact trajectory for debug purposes
+  // Show contact trajectory for debug purposes
+  std::stringstream contact_debug_ss;
+  contact_debug_ss << "RECEIVED CONTACTS:" << std::endl;
+  for (size_t i = 0; i < msg.contact_link_names.size(); ++i) {
+    contact_debug_ss << msg.contact_link_names[i] << ": ";
+    for (const auto& segment : result_contact_traj.at(i)) {
+      contact_debug_ss << segment.getContact() << " ";
+    }
+    contact_debug_ss << std::endl;
+  }
+  ROS_DEBUG_STREAM(contact_debug_ss.str());
 
   // Iterate through the joints that are in the message, in the order of the
   // mapping vector for (unsigned int joint_id=0; joint_id <

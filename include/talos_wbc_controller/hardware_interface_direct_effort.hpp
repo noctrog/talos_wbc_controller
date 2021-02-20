@@ -51,8 +51,8 @@ public:
     if (!joint_handles_ptr_) {
       return;
     }
-    assert(n_joints == state_error.position.size());
-    assert(n_joints == state_error.velocity.size());
+
+    assert(n_joints == desired_state.acceleration.size());
 
     // Update efforts
     for (size_t i = 0; i < n_joints; ++i) {
