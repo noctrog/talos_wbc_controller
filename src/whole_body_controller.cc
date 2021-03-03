@@ -4,7 +4,7 @@
  */
 
 #include <ros/package.h>
-#include <talos_qp_legs_controller/whole_body_controller.h>
+#include <talos_wbc_controller/whole_body_controller.h>
 #include <eigen3/Eigen/Eigen>
 #include <OsqpEigen/OsqpEigen.h>
 #include <pinocchio/parsers/urdf.hpp>
