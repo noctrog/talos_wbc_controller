@@ -2,7 +2,13 @@
 #define QP_FORMULATION_H
 
 #include <vector>
+#include <memory>
+
 #include <OsqpEigen/Solver.hpp>
+
+#include <pinocchio/fwd.hpp>
+#include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
 
 namespace talos_wbc_controller {
   
@@ -10,19 +16,62 @@ class QpFormulation
 {
 public:
 
+  // QP formulation cost weight
   typedef double Weight;
+  // Robot state
+  typedef std::vector<double> JointPos;
+  typedef std::vector<double> JointVel;
+  typedef std::vector<double> JointAcc;
+  // Robot feedback
   typedef std::vector<double> PosErrors;
   typedef std::vector<double> VelErrors;
   typedef std::vector<double> AccVector;
+  // Contact names and jacobians
+  typedef std::vector<std::string> ContactNames;
+  typedef std::vector<Eigen::MatrixXd, Eigen::aligned_allocator<Eigen::MatrixXd>> ContactJacobians;
+  // Robot representation
+  typedef pinocchio::Model Model;
+  typedef pinocchio::Data Data;
+  typedef std::shared_ptr<Model> ModelPtr;
+  typedef std::shared_ptr<Data> DataPtr;
   
   QpFormulation();
   virtual ~QpFormulation() = default;
 
+  /**
+   * Updates the robot state. It automatically computes the inertia,
+   * nonlinear, stacked contact jacobian and stacked contact jacobian
+   * time derivative.
+   */
+  void SetRobotState(const JointPos&, const JointVel&, const JointAcc&,
+		     const ContactNames);
+
   // Joint state task
-  void SetPositionErrors(const PosErrors& ep);
-  void SetVelocityErrors(const VelErrors& ev);
-  void SetReferenceAccelerations(const AccVector& qrdd);
+  /** 
+   * Sets the current position error, used to calculate the desired acceleration.
+   */
+  void SetPositionErrors(const PosErrors&);
+
+  /** 
+   * Sets the current velocity error, used to calculate the desired acceleration.
+   */
+  void SetVelocityErrors(const VelErrors&);
+
+  /** 
+   * Sets the reference acceleration, used to calculate the desired acceleration.
+   */
+  void SetReferenceAccelerations(const AccVector&);
+
+  /** 
+   * Sets the Kp constant that multiplies the position error. Used to
+   * calculate the desired acceleration.
+   */
   void SetKP(double Kp);
+
+  /** 
+   * Sets the Kp constant that multiplies the velocity error. Used to
+   * calculate the desired acceleration.
+   */
   void SetKV(double Kv);
 
 private:
@@ -66,6 +115,14 @@ private:
   VelErrors ev_;
   AccVector qrdd_;
   double Kp_, Kv_;
+
+  // The current contact jacobians
+  ContactJacobians contact_jacobians_;
+  ContactJacobians contact_jacobians_derivatives_;
+
+  // Robot internal representation
+  ModelPtr model_;
+  DataPtr data_;
 };
 
 }

@@ -136,12 +136,16 @@ include_directories(
 #   src/${PROJECT_NAME}/talos_wbc_controller.cpp
 # )
 
+add_library(qp_formulation
+  src/qp_formulation.cc)
+target_link_libraries(qp_formulation OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES})
+
 add_library(talos_wbc_lib
   src/whole_body_controller.cc
   src/talos_wbc_joint_trajectory_controller.cc)
-add_dependencies(talos_wbc_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(talos_wbc_lib qp_formulation ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(talos_wbc_lib
-  OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
+  qp_formulation ${pinocchio_LIBRARIES} ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
