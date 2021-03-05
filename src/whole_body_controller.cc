@@ -4,7 +4,7 @@
  */
 
 #include <ros/package.h>
-#include <talos_qp_legs_controller/whole_body_controller.h>
+#include <talos_wbc_controller/whole_body_controller.h>
 #include <eigen3/Eigen/Eigen>
 #include <OsqpEigen/OsqpEigen.h>
 #include <pinocchio/parsers/urdf.hpp>
@@ -30,6 +30,12 @@ namespace whole_body_controller_ns {
 
     // Initialize pinocchio model data
     robot_data_ = pinocchio::Data(robot_model_);
+
+    // Initialize selection matrix
+    S_ = Eigen::MatrixXd::Identity(robot_model_.nv, robot_model_.nv);
+    for (size_t i = 0; i < 6; ++i) {
+      S_(i,i) = 0.0;
+    }
 
     // Set matrix and variable sizes
     P_.resize(2,2);
@@ -93,19 +99,6 @@ namespace whole_body_controller_ns {
 
   void WholeBodyController::update(const ros::Time &time, const ros::Duration &period)
   {
-    // Get the current robot state
-    Eigen::VectorXd q; Eigen::VectorXd qd;
-    getRobotState(q, qd);
-
-    // Calculate the joint space inertia matrix and nonlinear effects
-    pinocchio::crba(robot_model_, robot_data_, q); // Only computes the upper triangular part
-    robot_data_.M.triangularView<Eigen::StrictlyLower>() =  // So it needs to be copied to the lower part
-      robot_data_.M.transpose().triangularView<Eigen::StrictlyLower>();
-    pinocchio::nonLinearEffects(robot_model_, robot_data_, q, qd);
-
-    std::cout << "Inercia: " << robot_data_.M << std::endl;
-    std::cout << "NLE: " << robot_data_.nle << std::endl;
-
     // Update the QP formulation from the current robot state
     updateQPFormulation();
 
@@ -176,7 +169,17 @@ namespace whole_body_controller_ns {
 
   bool WholeBodyController::updateBounds()
   {
-    // TODO
+    // Dynamic constraints
+    // Eigen::VectorXd dynamic_ul, dynamic_ll;
+    // dynamic_ul = dynamic_ll = robot_data_.nle;
+
+    // TODO Kinematic fixed contacts
+
+    // TODO Actuation limits
+
+    // TODO Contact stability (linearized friction cone)
+
+    // Mock QP Problem
     l_ << 1., 0., 0.;
     u_ << 1., 0.7, 0.7;
     return true;
@@ -184,7 +187,18 @@ namespace whole_body_controller_ns {
 
   bool WholeBodyController::updateLinearConstraints()
   {
-    // TODO
+    // Dynamic constraint
+    // TODO external forces
+    // Eigen::MatrixXd dynamic_matrix;
+    // dynamic_matrix << -robot_data_.M, S_;
+
+    // TODO Kinematic fixed contacts
+
+    // TODO Actuation limits
+
+    // TODO Contact stability (linearized friction cone)
+
+    // Mock QP Problem
     A_.resize(3, 2);
     A_.insert(0, 0) = 1.; A_.insert(0, 1) = 1.;
     A_.insert(1, 0) = 1.; A_.insert(1, 1) = 0.;
@@ -194,6 +208,16 @@ namespace whole_body_controller_ns {
 
   void WholeBodyController::updateQPFormulation()
   {
+    // Get the current robot state
+    Eigen::VectorXd q; Eigen::VectorXd qd;
+    getRobotState(q, qd);
+
+    // Calculate the joint space inertia matrix and nonlinear effects
+    pinocchio::crba(robot_model_, robot_data_, q); // Only computes the upper triangular part
+    robot_data_.M.triangularView<Eigen::StrictlyLower>() =  // So it needs to be copied to the lower part
+      robot_data_.M.transpose().triangularView<Eigen::StrictlyLower>();
+    pinocchio::nonLinearEffects(robot_model_, robot_data_, q, qd);
+
     // Update the QP formulation from the current robot state
     if (not updateHessianMatrix()) std::runtime_error("Error while calculating hessian matrix");
     if (not updateGradientMatrix()) std::runtime_error("Error computing the gradient matrix");
@@ -205,6 +229,7 @@ namespace whole_body_controller_ns {
 					  Eigen::VectorXd& qd)
   {
     // Delete previous data
+    // q.resize(robot_model_.nq); qd.resize(robot_model_.nv);
     q.resize(19); qd.resize(18);
 
     // TODO: Cartesian position and orientation (pos: xyz, rot: xyzw (cuaternion))
@@ -218,6 +243,7 @@ namespace whole_body_controller_ns {
     }
 
     // Joint positions and velocities
+    // for (size_t i = 7; i < robot_model_.nq; ++i) {
     for (size_t i = 7; i < 19; ++i) {
       q(i) = joint_handles_.at(i-7).getPosition();
       qd(i-1) = joint_handles_.at(i-7).getVelocity();
