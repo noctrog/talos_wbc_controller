@@ -127,6 +127,7 @@ include_directories(
   include
   ${EIGEN3_INCLUDE_DIRS}
   ${OSQPEIGEN_INCLUDE_DIRS}
+  ${pinocchio_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
 )
 
