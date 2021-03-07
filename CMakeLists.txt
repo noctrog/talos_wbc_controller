@@ -24,6 +24,8 @@ find_package(Eigen3 REQUIRED)
 find_package(OsqpEigen REQUIRED)
 find_package(pinocchio REQUIRED)
 
+add_definitions("-DBOOST_MPL_LIMIT_LIST_SIZE=30")
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
