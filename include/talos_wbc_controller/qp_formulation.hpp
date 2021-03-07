@@ -82,32 +82,32 @@ private:
    */
   void UpdateHessianMatrix(void);
   /**
-   *  Update the @ref q_ matrix according to the robot state.
+   *  Update the @ref g_ matrix according to the robot state.
+   *  You must call @ref SetPositionErrors, @ref SetVelocityErrors and 
+   *  @ref SetReferenceAccelerations first.
    */
-  bool updateGradientMatrix(void);
+  void UpdateGradientMatrix(void);
   /**
    *  Update the @ref l_ and @ref u_ matrices according to the robot state.
    */
-  bool updateBounds(void);
+  void UpdateBounds(void);
   /**
    *  Update the @ref A_ matrix according to the robot state.
    */
-  bool updateLinearConstraints(void);
+  void UpdateLinearConstraints(void);
 
   /// QP Solver instance
   OsqpEigen::Solver solver_;
   /// QP Hessian matrix
   Eigen::SparseMatrix<double> P_;
   /// Gradient matrix
-  Eigen::VectorXd q_;
+  Eigen::VectorXd g_;
   /// Linear constraint matrix
   Eigen::SparseMatrix<double> A_;
   /// Lower bound matrix
   Eigen::VectorXd l_;
   /// Upper bound matrix
   Eigen::VectorXd u_;
-
-  AccVector GetDesiredAccelerations(void);
 
   // Joint state task
   Weight joint_task_weight_;
@@ -119,10 +119,20 @@ private:
   // The current contact jacobians
   ContactJacobians contact_jacobians_;
   ContactJacobians contact_jacobians_derivatives_;
+  double mu_; /// Friction coeficient
+
+  // Selection matrix;
+  Eigen::MatrixXd S_;
 
   // Robot internal representation
   ModelPtr model_;
   DataPtr data_;
+
+  // Joint states
+  Eigen::VectorXd q_, qd_, qdd_;
+
+  // Joint actuator limits
+  Eigen::VectorXd u_max_;
 };
 
 }

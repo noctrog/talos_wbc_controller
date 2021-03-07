@@ -3,6 +3,8 @@
 
 #include <Eigen/Core>
 
+#include <OsqpEigen/OsqpEigen.h>
+
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/algorithm/crba.hpp>
 #include <pinocchio/algorithm/rnea.hpp>
@@ -16,7 +18,7 @@
 namespace talos_wbc_controller {
 
   QpFormulation::QpFormulation()
-    : joint_task_weight_(0.5), Kp_(1.0), Kv_(1.0)
+    : joint_task_weight_(0.5), Kp_(1.0), Kv_(1.0), mu_(0.4)
   {
     // Create model and data objects
     model_ = std::make_shared<Model>();
@@ -36,16 +38,21 @@ namespace talos_wbc_controller {
 
     // Initialize pinocchio model data
     data_ = std::make_shared<pinocchio::Data>(*model_);
+
+    // Compute the selection matrix, which remains always constant
+    S_ << Eigen::MatrixXd::Zero(model_->njoints, 6), Eigen::MatrixXd::Identity(model_->njoints, model_->njoints);
+
+    // TODO: Actuation limits
   }
   
   void
-  QpFormulation::SetRobotState(const JointPos& q_, const JointVel& qd_, const JointAcc& qdd_,
+  QpFormulation::SetRobotState(const JointPos& q, const JointVel& qd, const JointAcc& qdd,
 		     const ContactNames contact_names)
   {
     // Convert to Eigen without copying memory
-    Eigen::VectorXd q   = Eigen::VectorXd::Map(q_.data(), q_.size());
-    Eigen::VectorXd qd  = Eigen::VectorXd::Map(qd_.data(), q_.size());
-    Eigen::VectorXd qdd = Eigen::VectorXd::Map(qdd_.data(), q_.size());
+    q_   = Eigen::VectorXd::Map(q.data(), q.size());
+    qd_  = Eigen::VectorXd::Map(qd.data(), q.size());
+    qdd_ = Eigen::VectorXd::Map(qdd.data(), q.size());
 
     // Retrieve contact frame ids
     std::vector<int> contact_frames_ids;
@@ -55,20 +62,20 @@ namespace talos_wbc_controller {
     }
 
     // Computes the joint space inertia matrix (M)
-    pinocchio::crba(*model_, *data_, q);  // This only computes the upper triangular part
+    pinocchio::crba(*model_, *data_, q_);  // This only computes the upper triangular part
     data_->M.triangularView<Eigen::StrictlyLower>() = data_->M.transpose().triangularView<Eigen::StrictlyLower>();
     // Compute nonlinear effects
-    pinocchio::nonLinearEffects(*model_, *data_, q, qd);
+    pinocchio::nonLinearEffects(*model_, *data_, q_, qd_);
 
     // Compute contact jacobians
     contact_jacobians_.clear();
     contact_jacobians_derivatives_.clear();
     // Needed for the contact jacobian time variation
-    if (contact_frames_ids.size()) pinocchio::computeJointJacobiansTimeVariation(*model_, *data_, q, qd);
+    if (contact_frames_ids.size()) pinocchio::computeJointJacobiansTimeVariation(*model_, *data_, q_, qd_);
     for (const auto id : contact_frames_ids) {
       // Compute the contact jacobian
       Eigen::MatrixXd J(6, model_->nv); J.setZero();
-      pinocchio::computeFrameJacobian(*model_, *data_, q, id,
+      pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
 				      pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED,
 				      J);
       contact_jacobians_.push_back(J);
@@ -111,18 +118,123 @@ namespace talos_wbc_controller {
     Kv_ = Kv;
   }
 
-  QpFormulation::AccVector
-  QpFormulation::GetDesiredAccelerations(void)
+  void
+  QpFormulation::UpdateHessianMatrix(void)
   {
-    if (ep_.empty() or ev_.empty() or qrdd_.empty() or
-	not (ep_.size() == ev_.size()) or not (ep_.size() == qrdd_.size())) return {};
+    // Joint task cost
+    // The joint task cost is proportional to the identity matrix
+    typedef Eigen::Triplet<double> T;
+    std::vector<T> triplet_v;
+    triplet_v.reserve(model_->nv);
+    for (size_t i = 0; i < model_->nv; ++i)
+      triplet_v.emplace_back(i, i, 1.0);
+    Eigen::SparseMatrix<double> P_joint_task(model_->nv, model_->nv);
+    P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
 
-    AccVector acc_desired(ep_.size());
-    for (size_t i = 0; i < acc_desired.size(); ++i) {
-      acc_desired[i] = qrdd_[i] + Kv_ * ev_[i] + Kp_ * ep_[i];
-    }
+    // TODO: Center of mass task
 
-    return acc_desired;
+    // Join all tasks
+    P_ = P_joint_task * (joint_task_weight_ / 2.0);
   }
 
+  void
+  QpFormulation::UpdateGradientMatrix(void)
+  {
+    // Joint task cost
+    // Convert joint values to Eigen Vectors
+    Eigen::VectorXd ep  = Eigen::VectorXd::Map(ep_.data(), ep_.size());
+    Eigen::VectorXd ev  = Eigen::VectorXd::Map(ev_.data(), ev_.size());
+    Eigen::VectorXd qrdd = Eigen::VectorXd::Map(qrdd_.data(), qrdd_.size());
+    // Calculate joint gradient matrix
+    Eigen::VectorXd q_joint = -(qrdd + Kp_ * ep + Kv_ * ev);
+
+    // TODO: Center of mass task
+
+    // Join all tasks
+    g_ = q_joint * joint_task_weight_;
+  }
+
+  void
+  QpFormulation::UpdateBounds(void)
+  {
+    // Calculate the transpose stacked contact jacobian time derivative
+    // TODO: jacobiana entera o jacobiana a cachos?
+    size_t n_jac = contact_jacobians_derivatives_.size();
+    Eigen::MatrixXd dJ(6 * n_jac, model_->nv); dJ.setZero();
+    for (size_t i = 0; i < n_jac; ++i) {
+      dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
+    }
+
+    // Lower bound
+    l_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + model_->njoints + 5 * n_jac);
+    l_ <<
+      -data_->nle,                                             // Dynamics
+      -dJ * qd_,                                               // Contacts
+      -u_max_,                                                 // Torque limits
+      -Eigen::VectorXd::Constant(5*n_jac, -OsqpEigen::INFTY);  // Friction cone
+    // Upper bound
+    u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + model_->njoints + 5 * n_jac);
+    u_ <<
+      -data_->nle,                              // Dynamics
+      -dJ * qd_,                                // Contacts
+      u_max_,                                   // Torque limits
+      Eigen::VectorXd::Constant(5*n_jac, 0.0);  // Friction cone
+  }
+
+  void
+  QpFormulation::UpdateLinearConstraints(void)
+  {
+    // Calculate the stacked contact jacobian
+    size_t n_jac = contact_jacobians_.size();
+    Eigen::MatrixXd J(6 * n_jac, model_->nv); J.setZero();
+    for (size_t i = 0; i < n_jac; ++i) {
+      J.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
+    }
+
+    // Initialize new sparse matrix to 0
+    A_.resize(model_->nv + 6 * n_jac + model_->njoints + 5*n_jac, // TODO: 5??
+	      model_->nv + 6 * n_jac + model_->njoints);
+    A_.data().squeeze();
+    // Reserve memory
+    Eigen::VectorXi n_values_per_col;
+    n_values_per_col << Eigen::VectorXi::Constant(model_->nv, model_->nv + 6*n_jac),
+      Eigen::VectorXi::Constant(6*n_jac, model_->nv + 5), // 5 not multplied by n_jac (only one contact per force)
+      Eigen::VectorXi::Constant(model_->njoints, model_->nv + 1); // 1 for Identity matrix
+    A_.reserve(n_values_per_col);
+
+    // Dynamics: [M -Jt -St]
+    Eigen::MatrixXd dynamics(model_->nv, model_->nv + 6*n_jac + model_->njoints);
+    dynamics << data_->M, -J.transpose(), -S_.transpose();
+    for (size_t i = 0; i < dynamics.rows(); ++i)
+      for (size_t j = 0; j < dynamics.cols(); ++j)
+	A_.insert(i, j) = dynamics(i, j);
+
+    // Contacts: stacked jacobian matrix
+    for (size_t i = 0; i < J.rows(); ++i)
+      for (size_t j = 0; j < J.cols(); ++j)
+	A_.insert(model_->nv + i, j) = J(i, j);
+
+    // Actuation limits: Identity matrix
+    for (size_t i = 0; i < model_->njoints; ++i)
+      A_.insert(model_->nv + 6*n_jac + i, 2 * model_->nv + i) = 1.0;
+
+    // Contact stability
+    // For the moment ignore torques
+    Eigen::Vector3d ti(1.0, 0.0, 0.0), bi(0.0, 1.0, 0.0), ni(0.0, 0.0, 1.0);
+    Eigen::MatrixXd friction(5*n_jac , 6*n_jac);
+    for (size_t i = 0; i < n_jac; ++i) {
+      // Force pointing upwards (negative to keep all bounds equal)
+      friction.block(i*5, i*6, 1, 3) = -ni;
+      // Aproximate friction cone
+      friction.block(i*5+1, i*6, 1, 3) = (ti - mu_ * ni);
+      friction.block(i*5+2, i*6, 1, 3) = (ti + mu_ * ni);
+      friction.block(i*5+3, i*6, 1, 3) = (bi - mu_ * ni);
+      friction.block(i*5+4, i*6, 1, 3) = (bi + mu_ * ni);
+    }
+    // Save friction matrix in sparse matrix
+    for (size_t i = 0; i < friction.rows(); ++i)
+      for (size_t j = 0; j < friction.cols(); ++j)
+	A_.insert(model_->nv + 6*n_jac + model_->njoints + i,
+		  model_->nv + j) = friction(i, j);
+  }
 }
