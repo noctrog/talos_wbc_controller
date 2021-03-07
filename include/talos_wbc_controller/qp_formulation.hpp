@@ -21,7 +21,6 @@ public:
   // Robot state
   typedef std::vector<double> JointPos;
   typedef std::vector<double> JointVel;
-  typedef std::vector<double> JointAcc;
   // Robot feedback
   typedef std::vector<double> PosErrors;
   typedef std::vector<double> VelErrors;
@@ -43,8 +42,7 @@ public:
    * nonlinear, stacked contact jacobian and stacked contact jacobian
    * time derivative.
    */
-  void SetRobotState(const JointPos&, const JointVel&, const JointAcc&,
-		     const ContactNames);
+  void SetRobotState(const JointPos&, const JointVel&, const ContactNames);
 
   // Joint state task
   /** 
@@ -129,7 +127,7 @@ private:
   DataPtr data_;
 
   // Joint states
-  Eigen::VectorXd q_, qd_, qdd_;
+  Eigen::VectorXd q_, qd_;
 
   // Joint actuator limits
   Eigen::VectorXd u_max_;

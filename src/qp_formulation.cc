@@ -43,16 +43,16 @@ namespace talos_wbc_controller {
     S_ << Eigen::MatrixXd::Zero(model_->njoints, 6), Eigen::MatrixXd::Identity(model_->njoints, model_->njoints);
 
     // TODO: Actuation limits
+    u_max_ = Eigen::VectorXd::Constant(model_->njoints, 100.0);
   }
   
   void
-  QpFormulation::SetRobotState(const JointPos& q, const JointVel& qd, const JointAcc& qdd,
+  QpFormulation::SetRobotState(const JointPos& q, const JointVel& qd,
 		     const ContactNames contact_names)
   {
     // Convert to Eigen without copying memory
     q_   = Eigen::VectorXd::Map(q.data(), q.size());
     qd_  = Eigen::VectorXd::Map(qd.data(), q.size());
-    qdd_ = Eigen::VectorXd::Map(qdd.data(), q.size());
 
     // Retrieve contact frame ids
     std::vector<int> contact_frames_ids;
