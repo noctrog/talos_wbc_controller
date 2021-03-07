@@ -239,6 +239,12 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 	  hold_trajectory_ptr_->push_back(joint_segment);
   }
 
+  // Initialize contacts
+  contact_link_names_ = {"left_sole_link", "right_sole_link"}; // Both feet are on the ground
+  for (unsigned int i = 0; i < 2; ++i) {
+    contact_segment.emplace_back(true, 0.0);
+  }
+  
   {
     state_publisher_->lock();
     state_publisher_->msg_.joint_names = joint_names_;
@@ -288,11 +294,14 @@ update(const ros::Time& time, const ros::Duration& period)
 	   // curr_contact_traj.size(), contact_link_names_.size());
   // Sample current contacts if there is any contact trajectory
   std::vector<ContactSegment> curr_contacts(contact_link_names_.size());
-  // Get contact for current joint at current time, if any
+  std::vector<std::string> curr_contact_frame_names;
+  // Get contacts for at current time, if any
   if (curr_contact_traj.size() > 0) {
     for (size_t i = 0; i < curr_contact_traj.size(); ++i) {
       bool bContact = getContactsAtInstant(curr_contact_traj[i], time_data.uptime.toSec());
       curr_contacts.emplace_back(ContactSegment(bContact, time_data.uptime.toSec()));
+      if (bContact)
+	curr_contact_frame_names.push_back(contact_link_names_.at(i));
     }
   }
 
