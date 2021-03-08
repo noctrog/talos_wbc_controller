@@ -1,6 +1,10 @@
 #ifndef TALOS_WBC_JOINT_TRAJECTORY_CONTROLLER_HPP
 #define TALOS_WBC_JOINT_TRAJECTORY_CONTROLLER_HPP
 
+// QP Solver
+#include <pinocchio/fwd.hpp>
+#include <talos_wbc_controller/qp_formulation.hpp>
+
 // C++ standard
 #include <cassert>
 #include <iterator>
@@ -241,6 +245,11 @@ private:
   getContactsAtInstant(const ContactPerLink& curr_contact_traj,
 		       const typename Segment::Scalar &time);
 
+  // QP Solver
+  typedef talos_wbc_controller::QpFormulation Solver;
+  typedef std::shared_ptr<Solver> SolverPtr;
+
+  SolverPtr solver_;
 };
 
 } // namespace

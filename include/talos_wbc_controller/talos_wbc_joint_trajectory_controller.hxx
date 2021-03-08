@@ -93,7 +93,8 @@ JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapt
 JointTrajectoryWholeBodyController()
   : verbose_(false), // Set to true during debugging
     hold_trajectory_ptr_(new Trajectory),
-    hold_contact_trajectory_ptr_(new ContactTrajectory)
+    hold_contact_trajectory_ptr_(new ContactTrajectory),
+    solver_(new Solver)
 {
   // The verbose parameter is for advanced use as it breaks real-time safety
   // by enabling ROS logging services
@@ -419,6 +420,9 @@ update(const ros::Time& time, const ros::Duration& period)
   }
 
   // TODO Solve QP problem
+  solver_->SetRobotState(current_state_.position, current_state_.velocity,
+			 curr_contact_frame_names);
+
 
   // TODO: Hardware interface adapter: send torque commands through acceleration
   hw_iface_adapter_.updateCommand(time_data.uptime, time_data.period,
