@@ -243,9 +243,12 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Initialize contacts
   contact_link_names_ = {"left_sole_link", "right_sole_link"}; // Both feet are on the ground
   for (unsigned int i = 0; i < 2; ++i) {
+    ContactPerLink contact_segment;
     contact_segment.emplace_back(true, 0.0);
+    hold_contact_trajectory_ptr_->push_back(contact_segment);
   }
   
+
   {
     state_publisher_->lock();
     state_publisher_->msg_.joint_names = joint_names_;
@@ -751,6 +754,8 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
     // Set goal handle for the segment
     (*hold_trajectory_ptr_)[i].front().setGoalHandle(gh);
   }
+
+  
   curr_trajectory_box_.set(hold_trajectory_ptr_);
   curr_contact_trajectory_box_.set(hold_contact_trajectory_ptr_);
 }
