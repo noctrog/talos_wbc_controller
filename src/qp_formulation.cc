@@ -40,19 +40,28 @@ namespace talos_wbc_controller {
     data_ = std::make_shared<pinocchio::Data>(*model_);
 
     // Compute the selection matrix, which remains always constant
-    S_ << Eigen::MatrixXd::Zero(model_->njoints, 6), Eigen::MatrixXd::Identity(model_->njoints, model_->njoints);
+    S_ = Eigen::MatrixXd((model_->njoints - 2), model_->nv);
+    S_ << Eigen::MatrixXd::Zero((model_->njoints - 2), 6), Eigen::MatrixXd::Identity((model_->njoints - 2), (model_->njoints - 2));
 
     // TODO: Actuation limits
-    u_max_ = Eigen::VectorXd::Constant(model_->njoints, 100.0);
+    u_max_ = Eigen::VectorXd::Constant((model_->njoints - 2), 100.0);
+
+    q_  = Eigen::VectorXd::Constant((model_->njoints - 2) + 7, 0.0);
+    qd_ = Eigen::VectorXd::Constant((model_->njoints - 2) + 6, 0.0);
   }
   
   void
   QpFormulation::SetRobotState(const JointPos& q, const JointVel& qd,
 		     const ContactNames contact_names)
   {
-    // Convert to Eigen without copying memory
-    q_   = Eigen::VectorXd::Map(q.data(), q.size());
-    qd_  = Eigen::VectorXd::Map(qd.data(), q.size());
+    if (q.size() != (model_->njoints - 2) or qd.size() != (model_->njoints - 2)) {
+      ROS_ERROR("SetRobotState: number of joints does not match with the robot model");
+      return;
+    }
+
+    // Convert to Eigen without copying memory (TODO: Posicion y orientacion son relevantes!(por lo menos rotacion))
+    q_  << Eigen::VectorXd::Constant(7, 0.0), Eigen::VectorXd::Map(q.data(), q.size());
+    qd_ << Eigen::VectorXd::Constant(6, 0.0), Eigen::VectorXd::Map(qd.data(), qd.size());
 
     // Retrieve contact frame ids
     std::vector<int> contact_frames_ids;
@@ -67,7 +76,7 @@ namespace talos_wbc_controller {
     // Compute nonlinear effects
     pinocchio::nonLinearEffects(*model_, *data_, q_, qd_);
 
-    // Compute contact jacobians
+    // // Compute contact jacobians
     contact_jacobians_.clear();
     contact_jacobians_derivatives_.clear();
     // Needed for the contact jacobian time variation
@@ -166,14 +175,14 @@ namespace talos_wbc_controller {
     }
 
     // Lower bound
-    l_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + model_->njoints + 5 * n_jac);
+    l_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
     l_ <<
       -data_->nle,                                             // Dynamics
       -dJ * qd_,                                               // Contacts
       -u_max_,                                                 // Torque limits
       -Eigen::VectorXd::Constant(5*n_jac, -OsqpEigen::INFTY);  // Friction cone
     // Upper bound
-    u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + model_->njoints + 5 * n_jac);
+    u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
     u_ <<
       -data_->nle,                              // Dynamics
       -dJ * qd_,                                // Contacts
@@ -192,18 +201,18 @@ namespace talos_wbc_controller {
     }
 
     // Initialize new sparse matrix to 0
-    A_.resize(model_->nv + 6 * n_jac + model_->njoints + 5*n_jac, // TODO: 5??
-	      model_->nv + 6 * n_jac + model_->njoints);
+    A_.resize(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac, // TODO: 5??
+	      model_->nv + 6 * n_jac + (model_->njoints - 2));
     A_.data().squeeze();
     // Reserve memory
     Eigen::VectorXi n_values_per_col;
     n_values_per_col << Eigen::VectorXi::Constant(model_->nv, model_->nv + 6*n_jac),
       Eigen::VectorXi::Constant(6*n_jac, model_->nv + 5), // 5 not multplied by n_jac (only one contact per force)
-      Eigen::VectorXi::Constant(model_->njoints, model_->nv + 1); // 1 for Identity matrix
+      Eigen::VectorXi::Constant((model_->njoints - 2), model_->nv + 1); // 1 for Identity matrix
     A_.reserve(n_values_per_col);
 
     // Dynamics: [M -Jt -St]
-    Eigen::MatrixXd dynamics(model_->nv, model_->nv + 6*n_jac + model_->njoints);
+    Eigen::MatrixXd dynamics(model_->nv, model_->nv + 6*n_jac + (model_->njoints - 2));
     dynamics << data_->M, -J.transpose(), -S_.transpose();
     for (size_t i = 0; i < dynamics.rows(); ++i)
       for (size_t j = 0; j < dynamics.cols(); ++j)
@@ -215,7 +224,7 @@ namespace talos_wbc_controller {
 	A_.insert(model_->nv + i, j) = J(i, j);
 
     // Actuation limits: Identity matrix
-    for (size_t i = 0; i < model_->njoints; ++i)
+    for (size_t i = 0; i < (model_->njoints - 2); ++i)
       A_.insert(model_->nv + 6*n_jac + i, 2 * model_->nv + i) = 1.0;
 
     // Contact stability
@@ -234,7 +243,7 @@ namespace talos_wbc_controller {
     // Save friction matrix in sparse matrix
     for (size_t i = 0; i < friction.rows(); ++i)
       for (size_t j = 0; j < friction.cols(); ++j)
-	A_.insert(model_->nv + 6*n_jac + model_->njoints + i,
+	A_.insert(model_->nv + 6*n_jac + (model_->njoints - 2) + i,
 		  model_->nv + j) = friction(i, j);
   }
 }
