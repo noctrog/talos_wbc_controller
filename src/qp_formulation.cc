@@ -18,7 +18,7 @@
 namespace talos_wbc_controller {
 
   QpFormulation::QpFormulation()
-    : joint_task_weight_(0.5), Kp_(1.0), Kv_(1.0), mu_(0.4)
+    : joint_task_weight_(0.5), Kp_(1.0), Kv_(1.0), mu_(0.4), bWarmStart(false)
   {
     // Create model and data objects
     model_ = std::make_shared<Model>();
@@ -27,8 +27,7 @@ namespace talos_wbc_controller {
     ROS_INFO("Loading URDF model...");
     std::string xpp_talos_path = ros::package::getPath("talos_wbc_controller");
     if (xpp_talos_path.size() == 0) {
-      ROS_ERROR("You need to install the xpp_talos package: https://github.com/noctrog/talos_wbc_controller");
-      exit(-1);
+      std::runtime_error("Could not find the urdf model! Check if it is located in the urdf folder!");
     }
     std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2.urdf";
     std::cout << urdf_path << std::endl;
@@ -48,6 +47,9 @@ namespace talos_wbc_controller {
 
     q_  = Eigen::VectorXd::Constant((model_->njoints - 2) + 7, 0.0);
     qd_ = Eigen::VectorXd::Constant((model_->njoints - 2) + 6, 0.0);
+
+    // Initialize the QP solver
+    SetSolverParameters();
   }
   
   void
@@ -136,8 +138,13 @@ namespace talos_wbc_controller {
     std::vector<T> triplet_v;
     triplet_v.reserve(model_->nv);
     for (size_t i = 0; i < model_->nv; ++i)
-      triplet_v.emplace_back(i, i, 1.0);
-    Eigen::SparseMatrix<double> P_joint_task(model_->nv, model_->nv);
+      triplet_v.emplace_back(i+6, i+6, 1.0);
+
+    // Get matrix dimensions
+    const int n_jac = contact_jacobians_.size();
+    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+
+    Eigen::SparseMatrix<double> P_joint_task(cols, cols);
     P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
 
     // TODO: Center of mass task
@@ -154,8 +161,14 @@ namespace talos_wbc_controller {
     Eigen::VectorXd ep  = Eigen::VectorXd::Map(ep_.data(), ep_.size());
     Eigen::VectorXd ev  = Eigen::VectorXd::Map(ev_.data(), ev_.size());
     Eigen::VectorXd qrdd = Eigen::VectorXd::Map(qrdd_.data(), qrdd_.size());
+
+    // Get matrix dimensions
+    const int n_jac = contact_jacobians_.size();
+    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
     // Calculate joint gradient matrix
-    Eigen::VectorXd q_joint = -(qrdd + Kp_ * ep + Kv_ * ev);
+    Eigen::VectorXd q_joint(cols);
+    q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp_ * ep + Kv_ * ev),
+      Eigen::VectorXd::Constant(cols - 6 - ep.size(), 0.0);
 
     // TODO: Center of mass task
 
@@ -180,7 +193,7 @@ namespace talos_wbc_controller {
       -data_->nle,                                             // Dynamics
       -dJ * qd_,                                               // Contacts
       -u_max_,                                                 // Torque limits
-      -Eigen::VectorXd::Constant(5*n_jac, -OsqpEigen::INFTY);  // Friction cone
+      -Eigen::VectorXd::Constant(5*n_jac, OsqpEigen::INFTY);  // Friction cone
     // Upper bound
     u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
     u_ <<
@@ -201,11 +214,11 @@ namespace talos_wbc_controller {
     }
 
     // Initialize new sparse matrix to 0
-    A_.resize(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac, // TODO: 5??
-	      model_->nv + 6 * n_jac + (model_->njoints - 2));
-    A_.data().squeeze();
+    const int rows = model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac;
+    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+    A_.resize(rows, cols); A_.data().squeeze();
     // Reserve memory
-    Eigen::VectorXi n_values_per_col;
+    Eigen::VectorXi n_values_per_col(cols);
     n_values_per_col << Eigen::VectorXi::Constant(model_->nv, model_->nv + 6*n_jac),
       Eigen::VectorXi::Constant(6*n_jac, model_->nv + 5), // 5 not multplied by n_jac (only one contact per force)
       Eigen::VectorXi::Constant((model_->njoints - 2), model_->nv + 1); // 1 for Identity matrix
@@ -225,7 +238,7 @@ namespace talos_wbc_controller {
 
     // Actuation limits: Identity matrix
     for (size_t i = 0; i < (model_->njoints - 2); ++i)
-      A_.insert(model_->nv + 6*n_jac + i, 2 * model_->nv + i) = 1.0;
+      A_.insert(model_->nv + 6*n_jac + i, model_->nv + 6*n_jac + i) = 1.0;
 
     // Contact stability
     // For the moment ignore torques
@@ -245,5 +258,73 @@ namespace talos_wbc_controller {
       for (size_t j = 0; j < friction.cols(); ++j)
 	A_.insert(model_->nv + 6*n_jac + (model_->njoints - 2) + i,
 		  model_->nv + j) = friction(i, j);
+  }
+
+  void
+  QpFormulation::BuildProblem(void)
+  {
+    UpdateHessianMatrix();
+    UpdateGradientMatrix();
+    UpdateBounds();
+    UpdateLinearConstraints();
+
+    ROS_INFO("P shape: (%ld, %ld)", P_.rows(), P_.cols());
+    ROS_INFO("g shape: (%ld)", g_.size());
+    ROS_INFO("A shape: (%ld, %ld)", A_.rows(), A_.cols());
+    ROS_INFO("l shape: (%ld)", l_.size());
+    ROS_INFO("u shape: (%ld)", u_.size());
+  }
+
+  void
+  QpFormulation::SolveProblem(void)
+  {
+    if (bWarmStart) {
+      // Update the problem
+      if (not solver_.updateHessianMatrix(P_)) std::runtime_error("Could not set Hessian matrix!");
+      if (not solver_.updateGradient(g_)) std::runtime_error("Could not set gradient matrix!");
+      if (not solver_.updateLinearConstraintsMatrix(A_)) std::runtime_error("Could not set linear constraint matrix!");
+      if (not solver_.updateLowerBound(l_)) std::runtime_error("Could not set lower bound!");
+      if (not solver_.updateUpperBound(u_)) std::runtime_error("Could not set upper bound!");
+    } else {
+      // Create a new problem
+      if (not solver_.data()->setHessianMatrix(P_)) std::runtime_error("Could not set Hessian matrix!");
+      if (not solver_.data()->setGradient(g_)) std::runtime_error("Could not set gradient matrix!");
+      if (not solver_.data()->setLinearConstraintsMatrix(A_)) std::runtime_error("Could not set linear constraint matrix!");
+      if (not solver_.data()->setLowerBound(l_)) std::runtime_error("Could not set lower bound!");
+      if (not solver_.data()->setUpperBound(u_)) std::runtime_error("Could not set upper bound!");
+
+      // Init the solver
+      if (not solver_.initSolver()) std::runtime_error("Fail initializing solver!");
+      // Set the next iteration to be warm started
+      bWarmStart = true;
+    }
+
+    // Solve the QP problem
+    if (not solver_.solve()) std::runtime_error("Solution not found!");
+
+    // Retrieve the solution
+    Eigen::VectorXd solution;
+    solution = solver_.getSolution();
+
+    // TODO Delete
+    ROS_INFO_STREAM("solution: " << solution.transpose());
+  }
+
+  void
+  QpFormulation::SetSolverParameters(void)
+  {
+    // Set warm start
+    solver_.settings()->setWarmStart(true);
+    solver_.settings()->setAlpha(1.0);
+
+    // Set the number of variables and constraints
+    solver_.data()->setNumberOfVariables(2);
+    solver_.data()->setNumberOfConstraints(3);
+  }
+
+  void
+  QpFormulation::ResetWarmStart(void)
+  {
+    bWarmStart = false;
   }
 }

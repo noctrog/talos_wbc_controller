@@ -72,7 +72,34 @@ public:
    */
   void SetKV(double Kv);
 
+  /**
+   * @brief Builds all the matrices for the QP program.
+   * 
+   * You need to call @ref SetRobotState, @ref SetPositionErrors,
+   * @ref SetVelocityErrors and @ref SetReferenceAccelerations first.
+   *
+   */
+  void BuildProblem(void);
+
+  /**
+   * @brief Solves the QP problem. 
+   *
+   * You need to call @ref BuildProblem before.
+   *
+   */
+  void SolveProblem(void);
+
+  /**
+   * @brief Resets the warm start
+   */
+  void ResetWarmStart(void);
+
 private:
+
+  /** 
+   * @brief Initializes the solver parameters
+   */
+  void SetSolverParameters(void);
 
   // QP Formulation
   /**
@@ -96,6 +123,8 @@ private:
 
   /// QP Solver instance
   OsqpEigen::Solver solver_;
+  /// Used to decide if warm start the problem with the previous solution
+  bool bWarmStart;
   /// QP Hessian matrix
   Eigen::SparseMatrix<double> P_;
   /// Gradient matrix

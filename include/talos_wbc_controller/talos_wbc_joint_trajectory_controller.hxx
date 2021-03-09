@@ -425,7 +425,11 @@ update(const ros::Time& time, const ros::Duration& period)
   // TODO Solve QP problem
   solver_->SetRobotState(current_state_.position, current_state_.velocity,
 			 curr_contact_frame_names);
-
+  solver_->SetPositionErrors(state_error_.position);
+  solver_->SetVelocityErrors(state_error_.velocity);
+  solver_->SetReferenceAccelerations(desired_state_.acceleration);
+  solver_->BuildProblem();
+  solver_->SolveProblem();
 
   // TODO: Hardware interface adapter: send torque commands through acceleration
   hw_iface_adapter_.updateCommand(time_data.uptime, time_data.period,
