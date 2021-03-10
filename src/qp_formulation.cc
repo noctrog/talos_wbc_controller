@@ -61,6 +61,12 @@ namespace talos_wbc_controller {
       return;
     }
 
+    // If the number of contacts has changed, the problem cannot be warm started
+    // TODO: Warm start using the past information?
+    if (contact_names.size() != contact_jacobians_.size()) {
+      bWarmStart = false;
+    }
+
     // Convert to Eigen without copying memory (TODO: Posicion y orientacion son relevantes!(por lo menos rotacion))
     q_  << Eigen::VectorXd::Constant(7, 0.0), Eigen::VectorXd::Map(q.data(), q.size());
     qd_ << Eigen::VectorXd::Constant(6, 0.0), Eigen::VectorXd::Map(qd.data(), qd.size());
@@ -285,7 +291,15 @@ namespace talos_wbc_controller {
       if (not solver_.updateLinearConstraintsMatrix(A_)) std::runtime_error("Could not set linear constraint matrix!");
       if (not solver_.updateLowerBound(l_)) std::runtime_error("Could not set lower bound!");
       if (not solver_.updateUpperBound(u_)) std::runtime_error("Could not set upper bound!");
+      ROS_INFO("Using warm start");
     } else {
+      // Set the number of variables and constraints
+      const int n_jac = contact_jacobians_.size();
+      const int rows = model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac;
+      const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+      solver_.data()->setNumberOfVariables(cols);
+      solver_.data()->setNumberOfConstraints(rows);
+
       // Create a new problem
       if (not solver_.data()->setHessianMatrix(P_)) std::runtime_error("Could not set Hessian matrix!");
       if (not solver_.data()->setGradient(g_)) std::runtime_error("Could not set gradient matrix!");
@@ -295,16 +309,18 @@ namespace talos_wbc_controller {
 
       // Init the solver
       if (not solver_.initSolver()) std::runtime_error("Fail initializing solver!");
+      ROS_INFO("Solver initialized");
       // Set the next iteration to be warm started
       bWarmStart = true;
     }
 
     // Solve the QP problem
+    ROS_INFO("Solver solve() is starting...");
     if (not solver_.solve()) std::runtime_error("Solution not found!");
+    ROS_INFO("Solver solve() finished");
 
     // Retrieve the solution
-    Eigen::VectorXd solution;
-    solution = solver_.getSolution();
+    Eigen::VectorXd solution = solver_.getSolution();
 
     // TODO Delete
     ROS_INFO_STREAM("solution: " << solution.transpose());
@@ -313,13 +329,8 @@ namespace talos_wbc_controller {
   void
   QpFormulation::SetSolverParameters(void)
   {
-    // Set warm start
-    solver_.settings()->setWarmStart(true);
+    solver_.settings()->setWarmStart(bWarmStart);
     solver_.settings()->setAlpha(1.0);
-
-    // Set the number of variables and constraints
-    solver_.data()->setNumberOfVariables(2);
-    solver_.data()->setNumberOfConstraints(3);
   }
 
   void
