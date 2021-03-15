@@ -288,11 +288,10 @@ namespace talos_wbc_controller {
   {
     if (bWarmStart) {
       // Update the problem
-      if (not solver_.updateHessianMatrix(P_)) std::runtime_error("Could not set Hessian matrix!");
-      if (not solver_.updateGradient(g_)) std::runtime_error("Could not set gradient matrix!");
-      if (not solver_.updateLinearConstraintsMatrix(A_)) std::runtime_error("Could not set linear constraint matrix!");
-      if (not solver_.updateLowerBound(l_)) std::runtime_error("Could not set lower bound!");
-      if (not solver_.updateUpperBound(u_)) std::runtime_error("Could not set upper bound!");
+      if (not solver_.updateHessianMatrix(P_)) std::runtime_error("Could not update Hessian matrix!");
+      if (not solver_.updateGradient(g_)) std::runtime_error("Could not update gradient matrix!");
+      if (not solver_.updateLinearConstraintsMatrix(A_)) std::runtime_error("Could not update linear constraint matrix!");
+      if (not solver_.updateBounds(l_, u_)) std::runtime_error("Could not update the bounds!");
       ROS_INFO("Using warm start");
     } else {
       // Set the number of variables and constraints
