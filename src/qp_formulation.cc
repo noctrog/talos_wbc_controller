@@ -193,18 +193,20 @@ namespace talos_wbc_controller {
       dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
     }
 
+    auto contact_constraint = -dJ * qd_;
+
     // Lower bound
     l_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
     l_ <<
       -data_->nle,                                             // Dynamics
-      -dJ * qd_,                                               // Contacts
+      contact_constraint,                                      // Contacts
       -u_max_,                                                 // Torque limits
-      -Eigen::VectorXd::Constant(5*n_jac, OsqpEigen::INFTY);  // Friction cone
+      -Eigen::VectorXd::Constant(5*n_jac, OsqpEigen::INFTY);   // Friction cone
     // Upper bound
     u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
     u_ <<
       -data_->nle,                              // Dynamics
-      -dJ * qd_,                                // Contacts
+      contact_constraint,                       // Contacts
       u_max_,                                   // Torque limits
       Eigen::VectorXd::Constant(5*n_jac, 0.0);  // Friction cone
   }
