@@ -142,8 +142,8 @@ namespace talos_wbc_controller {
     // The joint task cost is proportional to the identity matrix
     typedef Eigen::Triplet<double> T;
     std::vector<T> triplet_v;
-    triplet_v.reserve(model_->nv);
-    for (size_t i = 0; i < model_->nv; ++i)
+    triplet_v.reserve(model_->njoints - 2);
+    for (size_t i = 0; i < model_->njoints - 2; ++i)
       triplet_v.emplace_back(i+6, i+6, 1.0);
 
     // Get matrix dimensions
