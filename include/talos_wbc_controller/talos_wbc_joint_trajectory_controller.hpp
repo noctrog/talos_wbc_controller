@@ -53,6 +53,8 @@
 #include <talos_wbc_controller/hardware_interface_direct_effort.hpp>
 #include <talos_wbc_controller/FollowContactJointTrajectoryAction.h>
 
+#include <nav_msgs/Odometry.h>
+
 namespace joint_trajectory_controller
 {
 
@@ -250,6 +252,10 @@ private:
   typedef std::shared_ptr<Solver> SolverPtr;
 
   SolverPtr solver_;
+
+  ros::Subscriber robot_base_link_state_; // Retrieve the position and velocity of the robot's base_link
+  void baseLinkCB(const nav_msgs::OdometryConstPtr& msg);
+  nav_msgs::Odometry last_base_link_state_;
 };
 
 } // namespace

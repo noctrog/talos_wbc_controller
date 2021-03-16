@@ -262,6 +262,10 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
     state_publisher_->unlock();
   }
 
+  // TODO: More elegant solution
+  // Retrieve robot's base_link state
+  robot_base_link_state_ = controller_nh_.subscribe("/floating_base_pose_simulated", 1,
+						    &JointTrajectoryWholeBodyController::baseLinkCB, this);
   return true;
 }
 
@@ -423,7 +427,15 @@ update(const ros::Time& time, const ros::Duration& period)
   }
 
   // Solve QP problem
-  solver_->SetRobotState(current_state_.position, current_state_.velocity,
+  const auto& pose = last_base_link_state_.pose.pose;
+  const auto& twist = last_base_link_state_.twist.twist;
+  std::vector<double> base_pos {pose.position.x, pose.position.y, pose.position.z,
+    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w};
+  std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
+    twist.angular.x, twist.angular.y, twist.angular.z};
+
+  solver_->SetRobotState(base_pos, base_vel,
+			 current_state_.position, current_state_.velocity,
 			 curr_contact_frame_names);
   solver_->SetPositionErrors(state_error_.position);
   solver_->SetVelocityErrors(state_error_.velocity);
@@ -768,6 +780,14 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
   
   curr_trajectory_box_.set(hold_trajectory_ptr_);
   curr_contact_trajectory_box_.set(hold_contact_trajectory_ptr_);
+}
+
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::baseLinkCB(const nav_msgs::OdometryConstPtr& msg)
+{
+  last_base_link_state_ = *msg;
 }
 
 } // namespace
