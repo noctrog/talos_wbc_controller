@@ -253,24 +253,26 @@ namespace talos_wbc_controller {
       A_.insert(model_->nv + 6*n_jac + i, model_->nv + 6*n_jac + i) = 1.0;
 
     // Contact stability
-    // For the moment ignore torques
-    Eigen::Vector3d ti(1.0, 0.0, 0.0), bi(0.0, 1.0, 0.0), ni(0.0, 0.0, 1.0);
-    Eigen::MatrixXd friction = Eigen::MatrixXd::Zero(5*n_jac , 6*n_jac);
-    for (size_t i = 0; i < n_jac; ++i) {
-      // Force pointing upwards (negative to keep all bounds equal)
-      friction.block<1,3>(i*5, i*6) = -ni;
-      // Aproximate friction cone
-      friction.block<1, 3>(i*5+1, i*6) = (ti - mu_ * ni);
-      friction.block<1, 3>(i*5+2, i*6) = (ti + mu_ * ni);
-      friction.block<1, 3>(i*5+3, i*6) = (bi - mu_ * ni);
-      friction.block<1, 3>(i*5+4, i*6) = (bi + mu_ * ni);
-    }
+    if (n_jac > 0) {
+      // For the moment ignore torques
+      Eigen::Vector3d ti(1.0, 0.0, 0.0), bi(0.0, 1.0, 0.0), ni(0.0, 0.0, 1.0);
+      Eigen::MatrixXd friction = Eigen::MatrixXd::Zero(5 * n_jac, 6 * n_jac);
+      for (size_t i = 0; i < n_jac; ++i) {
+	// Force pointing upwards (negative to keep all bounds equal)
+	friction.block<1, 3>(i * 5, i * 6) = -ni;
+	// Aproximate friction cone
+	friction.block<1, 3>(i * 5 + 1, i * 6) = (ti - mu_ * ni);
+	friction.block<1, 3>(i * 5 + 2, i * 6) = (ti + mu_ * ni);
+	friction.block<1, 3>(i * 5 + 3, i * 6) = (bi - mu_ * ni);
+	friction.block<1, 3>(i * 5 + 4, i * 6) = (bi + mu_ * ni);
+      }
 
-    // Save friction matrix in sparse matrix
-    for (size_t i = 0; i < friction.rows(); ++i)
-      for (size_t j = 0; j < friction.cols(); ++j)
-	A_.insert(model_->nv + 6*n_jac + (model_->njoints - 2) + i,
-		  model_->nv + j) = friction(i, j);
+      // Save friction matrix in sparse matrix
+      for (size_t i = 0; i < friction.rows(); ++i)
+	for (size_t j = 0; j < friction.cols(); ++j)
+	  A_.insert(model_->nv + 6 * n_jac + (model_->njoints - 2) + i,
+                    model_->nv + j) = friction(i, j);
+    }
   }
 
   void
