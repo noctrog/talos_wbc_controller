@@ -422,7 +422,7 @@ update(const ros::Time& time, const ros::Duration& period)
     successful_joint_traj_.reset();
   }
 
-  // TODO Solve QP problem
+  // Solve QP problem
   solver_->SetRobotState(current_state_.position, current_state_.velocity,
 			 curr_contact_frame_names);
   solver_->SetPositionErrors(state_error_.position);
@@ -431,7 +431,13 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->BuildProblem();
   solver_->SolveProblem();
 
-  // TODO: Hardware interface adapter: send torque commands through acceleration
+  // Copy solution to desired_state_
+  Eigen::VectorXd sol = solver_->GetSolution();
+  desired_state_.acceleration = std::vector<double>(sol.data() + sol.size() - joints_.size(),
+						    sol.data() + sol.size());
+
+  // TODO: Find a cleaner solution
+  // Hardware interface adapter: send torque commands through acceleration
   hw_iface_adapter_.updateCommand(time_data.uptime, time_data.period,
                                   desired_state_, state_error_);
 
