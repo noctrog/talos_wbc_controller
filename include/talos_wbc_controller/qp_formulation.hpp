@@ -19,6 +19,8 @@ public:
   // QP formulation cost weight
   typedef double Weight;
   // Robot state
+  typedef std::vector<double> SpatialPos;
+  typedef std::vector<double> SpatialVel;
   typedef std::vector<double> JointPos;
   typedef std::vector<double> JointVel;
   // Robot feedback
@@ -42,7 +44,8 @@ public:
    * nonlinear, stacked contact jacobian and stacked contact jacobian
    * time derivative.
    */
-  void SetRobotState(const JointPos&, const JointVel&, const ContactNames);
+  void SetRobotState(const SpatialPos&, const SpatialVel&,
+		     const JointPos&, const JointVel&, const ContactNames);
 
   // Joint state task
   /** 

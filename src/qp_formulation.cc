@@ -53,9 +53,13 @@ namespace talos_wbc_controller {
   }
   
   void
-  QpFormulation::SetRobotState(const JointPos& q, const JointVel& qd,
-		     const ContactNames contact_names)
+  QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
+			       const JointPos& q, const JointVel& qd, const ContactNames contact_names)
   {
+    if (base_pos.size() != 7 or base_vel.size() != 6) {
+      ROS_ERROR("SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively");
+      return;
+    }
     if (q.size() != (model_->njoints - 2) or qd.size() != (model_->njoints - 2)) {
       ROS_ERROR("SetRobotState: number of joints does not match with the robot model");
       return;
@@ -68,8 +72,8 @@ namespace talos_wbc_controller {
     }
 
     // Convert to Eigen without copying memory (TODO: Posicion y orientacion son relevantes!(por lo menos rotacion))
-    q_  << Eigen::VectorXd::Constant(7, 0.0), Eigen::VectorXd::Map(q.data(), q.size());
-    qd_ << Eigen::VectorXd::Constant(6, 0.0), Eigen::VectorXd::Map(qd.data(), qd.size());
+    q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
+    qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
 
     // Retrieve contact frame ids
     std::vector<int> contact_frames_ids;
