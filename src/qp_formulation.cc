@@ -194,7 +194,7 @@ namespace talos_wbc_controller {
     size_t n_jac = contact_jacobians_derivatives_.size();
     Eigen::MatrixXd dJ(6 * n_jac, model_->nv); dJ.setZero();
     for (size_t i = 0; i < n_jac; ++i) {
-      dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
+      dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_derivatives_[i];
     }
 
     auto contact_constraint = -dJ * qd_;
