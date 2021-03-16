@@ -94,6 +94,11 @@ public:
    */
   void ResetWarmStart(void);
 
+  /**
+   * @brief Returns the last solution. You need to call @ref SolveProblem first.
+   */
+  Eigen::VectorXd GetSolution(void);
+
 private:
 
   /** 
@@ -160,6 +165,9 @@ private:
 
   // Joint actuator limits
   Eigen::VectorXd u_max_;
+
+  // Saves the last solution
+  Eigen::VectorXd solution_;
 };
 
 }

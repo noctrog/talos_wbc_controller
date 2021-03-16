@@ -322,10 +322,10 @@ namespace talos_wbc_controller {
     ROS_INFO("Solver solve() finished");
 
     // Retrieve the solution
-    Eigen::VectorXd solution = solver_.getSolution();
+    solution_ = solver_.getSolution();
 
     // TODO Delete
-    ROS_INFO_STREAM("solution: " << solution.transpose());
+    ROS_INFO_STREAM("solution: " << solution_.transpose());
   }
 
   void
@@ -339,5 +339,11 @@ namespace talos_wbc_controller {
   QpFormulation::ResetWarmStart(void)
   {
     bWarmStart = false;
+  }
+
+  Eigen::VectorXd
+  QpFormulation::GetSolution(void)
+  {
+    return solution_;
   }
 }
