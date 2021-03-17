@@ -209,6 +209,11 @@ namespace talos_wbc_controller {
       dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_derivatives_[i];
     }
 
+    // for (const auto& m : contact_jacobians_derivatives_) {
+    //   ROS_INFO_STREAM("Contact jacobian derivative: \n" << m.transpose());
+    // }
+    // ROS_INFO_STREAM("dJ:\n" << dJ.transpose());
+
     auto contact_constraint = -dJ * qd_;
 
     // Lower bound
@@ -294,12 +299,6 @@ namespace talos_wbc_controller {
     UpdateGradientMatrix();
     UpdateBounds();
     UpdateLinearConstraints();
-
-    ROS_INFO("P shape: (%ld, %ld)", P_.rows(), P_.cols());
-    ROS_INFO("g shape: (%ld)", g_.size());
-    ROS_INFO("A shape: (%ld, %ld)", A_.rows(), A_.cols());
-    ROS_INFO("l shape: (%ld)", l_.size());
-    ROS_INFO("u shape: (%ld)", u_.size());
   }
 
   void
@@ -329,21 +328,18 @@ namespace talos_wbc_controller {
 
       // Init the solver
       if (not solver_.initSolver()) std::runtime_error("Fail initializing solver!");
-      ROS_INFO("Solver initialized");
       // Set the next iteration to be warm started
       bWarmStart = true;
     }
 
     // Solve the QP problem
-    ROS_INFO("Solver solve() is starting...");
     if (not solver_.solve()) std::runtime_error("Solution not found!");
-    ROS_INFO("Solver solve() finished");
 
     // Retrieve the solution
     solution_ = solver_.getSolution();
 
     // TODO Delete
-    ROS_INFO_STREAM("solution: " << solution_.transpose());
+    // ROS_INFO_STREAM("solution: " << solution_.transpose());
   }
 
   void
