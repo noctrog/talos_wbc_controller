@@ -266,6 +266,19 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Retrieve robot's base_link state
   robot_base_link_state_ = controller_nh_.subscribe("/floating_base_pose_simulated", 1,
 						    &JointTrajectoryWholeBodyController::baseLinkCB, this);
+
+  // Dynamic reconfigure used to tune the Kp and Kv constants
+  ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
+  ddr_->registerVariable<double>("Kp", 1000.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramKpCB, this, _1),
+				"Position constant for the QP problem",
+				0.0, 2e5);
+  ddr_->registerVariable<double>("Kv", 0.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramKvCB, this, _1),
+				"Velocity constant for the QP problem",
+				0.0, 1e4);
+  ddr_->publishServicesTopics();
+
   return true;
 }
 
@@ -788,6 +801,20 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::baseLinkCB(const nav_msgs::OdometryConstPtr& msg)
 {
   last_base_link_state_ = *msg;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramKpCB(double new_kp)
+{
+  solver_->SetKP(new_kp);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramKvCB(double new_kv)
+{
+  solver_->SetKV(new_kv);
 }
 
 } // namespace

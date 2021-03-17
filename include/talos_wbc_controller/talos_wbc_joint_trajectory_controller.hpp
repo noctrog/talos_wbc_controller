@@ -55,6 +55,8 @@
 
 #include <nav_msgs/Odometry.h>
 
+#include <ddynamic_reconfigure/ddynamic_reconfigure.h>
+
 namespace joint_trajectory_controller
 {
 
@@ -252,6 +254,11 @@ private:
   typedef std::shared_ptr<Solver> SolverPtr;
 
   SolverPtr solver_;
+
+  // Dynamic reconfigure, used to tune the solver's Kp and Kv constants
+  std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddr_;
+  void paramKpCB(double new_kp);
+  void paramKvCB(double new_kv);
 
   ros::Subscriber robot_base_link_state_; // Retrieve the position and velocity of the robot's base_link
   void baseLinkCB(const nav_msgs::OdometryConstPtr& msg);

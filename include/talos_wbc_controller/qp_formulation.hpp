@@ -69,11 +69,21 @@ public:
    */
   void SetKP(double Kp);
 
+  /**
+   * Returns the current Kp constant.
+   */
+  double GetKP(void);
+
   /** 
    * Sets the Kp constant that multiplies the velocity error. Used to
    * calculate the desired acceleration.
    */
   void SetKV(double Kv);
+
+  /**
+   * Returns the current Kv constant.
+   */
+  double GetKV(void);
 
   /**
    * @brief Builds all the matrices for the QP program.

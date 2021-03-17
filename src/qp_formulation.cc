@@ -133,10 +133,22 @@ namespace talos_wbc_controller {
     Kp_ = Kp;
   }
 
+  double
+  QpFormulation::GetKP(void)
+  {
+    return Kp_;
+  }
+
   void
   QpFormulation::SetKV(double Kv)
   {
     Kv_ = Kv;
+  }
+
+  double
+  QpFormulation::GetKV(void)
+  {
+    return Kv_;
   }
 
   void

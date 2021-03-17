@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   control_msgs
   message_generation
   roscpp
+  ddynamic_reconfigure
 )
 
 find_package(Boost REQUIRED COMPONENTS system)
