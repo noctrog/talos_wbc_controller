@@ -67,7 +67,7 @@ namespace talos_wbc_controller {
 
     // If the number of contacts has changed, the problem cannot be warm started
     // TODO: Warm start using the past information?
-    if (contact_names.size() != contact_jacobians_.size()) {
+    if (contact_names.size() != contact_names_.size()) {
       bWarmStart = false;
     }
 
@@ -75,11 +75,15 @@ namespace talos_wbc_controller {
     q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
     qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
 
+    // Save the new contact names
+    contact_names_ = contact_names;
+
     // Retrieve contact frame ids
-    std::vector<int> contact_frames_ids;
-    for (const auto& name : contact_names) {
+    contact_frames_ids_.clear();
+    for (const auto& name : contact_names_) {
       int id = model_->getFrameId(name);
-      contact_frames_ids.push_back(id);
+      if (id < model_->frames.size())
+	contact_frames_ids_.push_back(id);
     }
 
     // Computes the joint space inertia matrix (M)
@@ -88,24 +92,14 @@ namespace talos_wbc_controller {
     // Compute nonlinear effects
     pinocchio::nonLinearEffects(*model_, *data_, q_, qd_);
 
-    // // Compute contact jacobians
+    // Compute contact jacobians
     contact_jacobians_.clear();
-    contact_jacobians_derivatives_.clear();
-    // Needed for the contact jacobian time variation
-    if (contact_frames_ids.size()) pinocchio::computeJointJacobiansTimeVariation(*model_, *data_, q_, qd_);
-    for (const auto id : contact_frames_ids) {
-      // Compute the contact jacobian
+    for (const auto id : contact_frames_ids_) {
       Eigen::MatrixXd J(6, model_->nv); J.setZero();
       pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
 				      pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED,
 				      J);
       contact_jacobians_.push_back(J);
-      // Compute the contact jacobian time variation
-      J.setZero();
-      pinocchio::getFrameJacobianTimeVariation(*model_, *data_, id,
-					       pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED,
-					       J);
-      contact_jacobians_derivatives_.push_back(J);
     }
   }
 
@@ -199,34 +193,39 @@ namespace talos_wbc_controller {
   void
   QpFormulation::UpdateBounds(void)
   {
-    // Calculate the transpose stacked contact jacobian time derivative
-    // TODO: jacobiana entera o jacobiana a cachos?
-    size_t n_jac = contact_jacobians_derivatives_.size();
-    Eigen::MatrixXd dJ(6 * n_jac, model_->nv); dJ.setZero();
-    for (size_t i = 0; i < n_jac; ++i) {
-      dJ.block(i * 6, 0, 6, model_->nv) = contact_jacobians_derivatives_[i];
+    // Calculate the contact constraint (null acceleration at end effectors)
+    const int n_jac = contact_frames_ids_.size();
+    Eigen::VectorXd dJqd;
+    if (n_jac > 0) {
+      dJqd = Eigen::VectorXd(n_jac * 6); // Reserve memory
+
+      // Compute the needed forward kinematics for the current robot state
+      pinocchio::forwardKinematics(*model_, *data_, q_, qd_, 0*qd_);
+      // Compute the frame acceleration constraint for every contact
+      for (size_t i = 0; i < n_jac; ++i) {
+	auto a = pinocchio::getFrameClassicalAcceleration(*model_, *data_, contact_frames_ids_[i],
+							  pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED);
+	dJqd.segment(i*6, 6) << a.linear(), a.angular();
+      }
+
+    } else {
+      dJqd = Eigen::VectorXd::Constant(0, 0.0);
     }
 
-    // for (const auto& m : contact_jacobians_derivatives_) {
-    //   ROS_INFO_STREAM("Contact jacobian derivative: \n" << m.transpose());
-    // }
-    // ROS_INFO_STREAM("dJ:\n" << dJ.transpose());
-
-    auto contact_constraint = -dJ * qd_;
     const int n_constraints = GetNumConstraints();
 
     // Lower bound
     l_ = Eigen::VectorXd::Zero(n_constraints);
     l_ <<
       -data_->nle,                                             // Dynamics
-      contact_constraint,                                      // Contacts
+      -dJqd,                                                   // Contacts
       -u_max_,                                                 // Torque limits
       -Eigen::VectorXd::Constant(5*n_jac, OsqpEigen::INFTY);   // Friction cone
     // Upper bound
     u_ = Eigen::VectorXd::Zero(n_constraints);
     u_ <<
       -data_->nle,                              // Dynamics
-      contact_constraint,                       // Contacts
+      -dJqd,                                    // Contacts
       u_max_,                                   // Torque limits
       Eigen::VectorXd::Constant(5*n_jac, 0.0);  // Friction cone
   }
@@ -235,7 +234,7 @@ namespace talos_wbc_controller {
   QpFormulation::UpdateLinearConstraints(void)
   {
     // Calculate the stacked contact jacobian
-    size_t n_jac = contact_jacobians_.size();
+    size_t n_jac = contact_frames_ids_.size();
     Eigen::MatrixXd J(6 * n_jac, model_->nv); J.setZero();
     for (size_t i = 0; i < n_jac; ++i) {
       J.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
@@ -362,14 +361,14 @@ namespace talos_wbc_controller {
   int
   QpFormulation::GetNumVariables(void) const
   {
-    const int n_jac = contact_jacobians_.size();
+    const int n_jac = contact_frames_ids_.size();
     return model_->nv + 6 * n_jac + (model_->njoints - 2);
   }
 
   int
   QpFormulation::GetNumConstraints(void) const
   {
-    const int n_jac = contact_jacobians_.size();
+    const int n_jac = contact_frames_ids_.size();
     return model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac;
   }
 }

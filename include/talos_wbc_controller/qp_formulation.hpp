@@ -173,7 +173,8 @@ private:
 
   // The current contact jacobians
   ContactJacobians contact_jacobians_;
-  ContactJacobians contact_jacobians_derivatives_;
+  ContactNames contact_names_;
+  std::vector<int> contact_frames_ids_;
   double mu_; /// Friction coeficient
 
   // Selection matrix;
