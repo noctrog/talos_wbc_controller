@@ -139,6 +139,16 @@ private:
    */
   void UpdateLinearConstraints(void);
 
+  /**
+   * Returns the number of variables for the current formulation.
+   */
+  int GetNumVariables(void) const;
+
+  /**
+   * Returns the number of constraints for the current formulation.
+   */
+  int GetNumConstraints(void) const;
+
   /// QP Solver instance
   OsqpEigen::Solver solver_;
   /// Used to decide if warm start the problem with the previous solution

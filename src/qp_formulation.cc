@@ -163,8 +163,7 @@ namespace talos_wbc_controller {
       triplet_v.emplace_back(i+6, i+6, 1.0);
 
     // Get matrix dimensions
-    const int n_jac = contact_jacobians_.size();
-    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+    const int cols = GetNumVariables();
 
     Eigen::SparseMatrix<double> P_joint_task(cols, cols);
     P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
@@ -185,8 +184,7 @@ namespace talos_wbc_controller {
     Eigen::VectorXd qrdd = Eigen::VectorXd::Map(qrdd_.data(), qrdd_.size());
 
     // Get matrix dimensions
-    const int n_jac = contact_jacobians_.size();
-    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+    const int cols = GetNumVariables();
     // Calculate joint gradient matrix
     Eigen::VectorXd q_joint(cols);
     q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp_ * ep + Kv_ * ev),
@@ -215,16 +213,17 @@ namespace talos_wbc_controller {
     // ROS_INFO_STREAM("dJ:\n" << dJ.transpose());
 
     auto contact_constraint = -dJ * qd_;
+    const int n_constraints = GetNumConstraints();
 
     // Lower bound
-    l_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
+    l_ = Eigen::VectorXd::Zero(n_constraints);
     l_ <<
       -data_->nle,                                             // Dynamics
       contact_constraint,                                      // Contacts
       -u_max_,                                                 // Torque limits
       -Eigen::VectorXd::Constant(5*n_jac, OsqpEigen::INFTY);   // Friction cone
     // Upper bound
-    u_ = Eigen::VectorXd::Zero(model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac);
+    u_ = Eigen::VectorXd::Zero(n_constraints);
     u_ <<
       -data_->nle,                              // Dynamics
       contact_constraint,                       // Contacts
@@ -243,8 +242,8 @@ namespace talos_wbc_controller {
     }
 
     // Initialize new sparse matrix to 0
-    const int rows = model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac;
-    const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+    const int rows = GetNumConstraints();
+    const int cols = GetNumVariables();
     A_.resize(rows, cols); A_.data().squeeze();
     // Reserve memory
     Eigen::VectorXi n_values_per_col(cols);
@@ -313,9 +312,8 @@ namespace talos_wbc_controller {
       ROS_INFO("Using warm start");
     } else {
       // Set the number of variables and constraints
-      const int n_jac = contact_jacobians_.size();
-      const int rows = model_->nv + 6 * n_jac + (model_->njoints - 2) + 5 * n_jac;
-      const int cols = model_->nv + 6 * n_jac + (model_->njoints - 2);
+      const int rows = GetNumConstraints();
+      const int cols = GetNumVariables();
       solver_.data()->setNumberOfVariables(cols);
       solver_.data()->setNumberOfConstraints(rows);
 
@@ -359,5 +357,19 @@ namespace talos_wbc_controller {
   QpFormulation::GetSolution(void)
   {
     return solution_;
+  }
+
+  int
+  QpFormulation::GetNumVariables(void) const
+  {
+    const int n_jac = contact_jacobians_.size();
+    return model_->nv + 6 * n_jac + (model_->njoints - 2);
+  }
+
+  int
+  QpFormulation::GetNumConstraints(void) const
+  {
+    const int n_jac = contact_jacobians_.size();
+    return model_->nv + 6 * n_jac + (model_->njoints - 2) + 5*n_jac;
   }
 }
