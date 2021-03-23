@@ -16,8 +16,17 @@ class QpFormulation
 {
 public:
 
+  enum class ConstraintName {
+    EQUATION_OF_MOTION,
+    FIXED_CONTACT_CONDITION,
+    ACTUATION_LIMITS,
+    CONTACT_STABILITY
+  };
+  
   // QP formulation cost weight
   typedef double Weight;
+  // Constraint list
+  typedef std::vector<ConstraintName> ConstraintList;
   // Robot state
   typedef std::vector<double> SpatialPos;
   typedef std::vector<double> SpatialVel;
@@ -35,7 +44,7 @@ public:
   typedef pinocchio::Data Data;
   typedef std::shared_ptr<Model> ModelPtr;
   typedef std::shared_ptr<Data> DataPtr;
-  
+
   QpFormulation();
   virtual ~QpFormulation() = default;
 
@@ -112,16 +121,32 @@ public:
    */
   Eigen::VectorXd GetSolution(void);
 
+  /** 
+   * @brief Removes all active contraints.
+   */
+  void ClearConstraints(void);
+
+  /**
+   * @brief Inserts a constraint
+   */
+  void PushConstraint(const ConstraintName constraint);
+
 private:
 
+  // Dynamics algorithms
+  /** 
+   * @brief Computes the term dJ * qd for the current robot configuration
+   */
+  Eigen::MatrixXd ComputedJqd(void) const;
+
+  // QP Formulation
   /** 
    * @brief Initializes the solver parameters
    */
   void SetSolverParameters(void);
 
-  // QP Formulation
   /**
-   * Updates the @ref P_ matrix according to the robot state
+   * @brief Updates the @ref P_ matrix according to the robot state
    */
   void UpdateHessianMatrix(void);
   /**
@@ -131,23 +156,32 @@ private:
    */
   void UpdateGradientMatrix(void);
   /**
-   *  Update the @ref l_ and @ref u_ matrices according to the robot state.
+   *  @brief Update the @ref l_ and @ref u_ matrices according to the robot state.
    */
   void UpdateBounds(void);
   /**
-   *  Update the @ref A_ matrix according to the robot state.
+   *  @brief Update the @ref A_ matrix according to the robot state.
    */
   void UpdateLinearConstraints(void);
 
   /**
-   * Returns the number of variables for the current formulation.
+   * @brief Returns the number of variables for the current formulation.
    */
   int GetNumVariables(void) const;
 
   /**
-   * Returns the number of constraints for the current formulation.
+   * @brief Returns the number of constraints rows for the current formulation.
    */
   int GetNumConstraints(void) const;
+
+  /**
+   * @brief Returns the number of rows for each constraint.
+   * 
+   * You must call @ref SetRobotState, since we need to know how many
+   * contacts the robot is currently making.
+   *
+   */
+  int GetNumConstraintRows(const ConstraintName constraint) const;
 
   /// QP Solver instance
   OsqpEigen::Solver solver_;
@@ -163,6 +197,9 @@ private:
   Eigen::VectorXd l_;
   /// Upper bound matrix
   Eigen::VectorXd u_;
+
+  // List of currently active constraints
+  ConstraintList active_constraints_;
 
   // Joint state task
   Weight joint_task_weight_;

@@ -286,6 +286,8 @@ template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>::
 update(const ros::Time& time, const ros::Duration& period)
 {
+  using namespace talos_wbc_controller;
+
   realtime_busy_ = true;
   // Get currently followed trajectory
   TrajectoryPtr curr_traj_ptr;
@@ -374,7 +376,7 @@ update(const ros::Time& time, const ros::Duration& period)
           if(rt_segment_goal && rt_segment_goal->preallocated_result_)
           {
             rt_segment_goal->preallocated_result_->error_code =
-	      talos_wbc_controller::FollowContactJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
+	      FollowContactJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
             rt_segment_goal->setAborted(rt_segment_goal->preallocated_result_);
             rt_active_goal_.reset();
             successful_joint_traj_.reset();
@@ -414,7 +416,7 @@ update(const ros::Time& time, const ros::Duration& period)
           }
 
           if(rt_segment_goal){
-            rt_segment_goal->preallocated_result_->error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::GOAL_TOLERANCE_VIOLATED;
+            rt_segment_goal->preallocated_result_->error_code = FollowContactJointTrajectoryResult::GOAL_TOLERANCE_VIOLATED;
             rt_segment_goal->setAborted(rt_segment_goal->preallocated_result_);
           }
           else
@@ -433,7 +435,7 @@ update(const ros::Time& time, const ros::Duration& period)
   RealtimeGoalHandlePtr current_active_goal(rt_active_goal_);
   if (current_active_goal && current_active_goal->preallocated_result_ && successful_joint_traj_.count() == joints_.size())
   {
-    current_active_goal->preallocated_result_->error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::SUCCESSFUL;
+    current_active_goal->preallocated_result_->error_code = FollowContactJointTrajectoryResult::SUCCESSFUL;
     current_active_goal->setSucceeded(current_active_goal->preallocated_result_);
     rt_active_goal_.reset();
     successful_joint_traj_.reset();
@@ -447,9 +449,15 @@ update(const ros::Time& time, const ros::Duration& period)
   std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
     twist.angular.x, twist.angular.y, twist.angular.z};
 
-  solver_->SetRobotState(base_pos, base_vel,
-			 current_state_.position, current_state_.velocity,
-			 curr_contact_frame_names);
+  solver_->SetRobotState(base_pos, base_vel, current_state_.position,
+                         current_state_.velocity,
+                         // curr_contact_frame_names);
+                         {});
+  solver_->ClearConstraints();
+  solver_->PushConstraint(QpFormulation::ConstraintName::EQUATION_OF_MOTION);
+  // solver_->PushConstraint(QpFormulation::ConstraintName::FIXED_CONTACT_CONDITION);
+  solver_->PushConstraint(QpFormulation::ConstraintName::ACTUATION_LIMITS);
+  // solver_->PushConstraint(QpFormulation::ConstraintName::CONTACT_STABILITY;
   solver_->SetPositionErrors(state_error_.position);
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
@@ -458,6 +466,7 @@ update(const ros::Time& time, const ros::Duration& period)
 
   // Copy solution to desired_state_
   Eigen::VectorXd sol = solver_->GetSolution();
+  std::cout << "Torques: " << sol.tail(12).transpose() << '\n';
   desired_state_.acceleration = std::vector<double>(sol.data() + sol.size() - joints_.size(),
 						    sol.data() + sol.size());
 
