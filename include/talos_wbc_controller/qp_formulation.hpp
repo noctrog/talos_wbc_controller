@@ -131,6 +131,16 @@ public:
    */
   void PushConstraint(const ConstraintName constraint);
 
+  /**
+   * @brief Returns the number of variables for the current formulation.
+   */
+  int GetNumVariables(void) const;
+
+  /**
+   * @brief Returns the number of constraints rows for the current formulation.
+   */
+  int GetNumConstraints(void) const;
+
 private:
 
   // Dynamics algorithms
@@ -163,16 +173,6 @@ private:
    *  @brief Update the @ref A_ matrix according to the robot state.
    */
   void UpdateLinearConstraints(void);
-
-  /**
-   * @brief Returns the number of variables for the current formulation.
-   */
-  int GetNumVariables(void) const;
-
-  /**
-   * @brief Returns the number of constraints rows for the current formulation.
-   */
-  int GetNumConstraints(void) const;
 
   /**
    * @brief Returns the number of rows for each constraint.

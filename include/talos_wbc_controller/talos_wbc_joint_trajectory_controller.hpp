@@ -259,6 +259,19 @@ private:
   std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddr_;
   void paramKpCB(double new_kp);
   void paramKvCB(double new_kv);
+  // Active constraints
+  struct {
+    bool b_equation_of_motion_constraint;
+    bool b_fixed_contact_condition_constraint;
+    bool b_actuation_limits_constraint;
+    bool b_contact_stability_constraint;
+  } SolverConstraints_;
+  // Setters
+  void paramEquationOfMotion(bool activate);
+  void paramFixedContactCondition(bool activate);
+  void paramActuationLimits(bool activate);
+  void paramContactStability(bool activate);
+  
 
   ros::Subscriber robot_base_link_state_; // Retrieve the position and velocity of the robot's base_link
   void baseLinkCB(const nav_msgs::OdometryConstPtr& msg);

@@ -269,6 +269,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
+  // Controller parameters
   ddr_->registerVariable<double>("Kp", 1000.0,
 				boost::bind(&JointTrajectoryWholeBodyController::paramKpCB, this, _1),
 				"Position constant for the QP problem",
@@ -277,7 +278,26 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 				boost::bind(&JointTrajectoryWholeBodyController::paramKvCB, this, _1),
 				"Velocity constant for the QP problem",
 				0.0, 1e4);
+  // Controller constraints
+  ddr_->registerVariable<bool>("equation_of_motion", true,
+			       boost::bind(&JointTrajectoryWholeBodyController::paramEquationOfMotion, this, _1),
+			       "Activates the equation of motion constraint.");
+  ddr_->registerVariable<bool>("fixed_contact_condition", false,
+			       boost::bind(&JointTrajectoryWholeBodyController::paramFixedContactCondition, this, _1),
+			       "Activates the fixed contact condition constraint.");
+  ddr_->registerVariable<bool>("actuation_limits", true,
+			       boost::bind(&JointTrajectoryWholeBodyController::paramActuationLimits, this, _1),
+			       "Activates the actuation limits constraint.");
+  ddr_->registerVariable<bool>("contact_stability", false,
+			       boost::bind(&JointTrajectoryWholeBodyController::paramContactStability, this, _1),
+			       "Set the equation of motion constraint.");
   ddr_->publishServicesTopics();
+
+  // TODO: ddr does not set automatically in the beginning?
+  SolverConstraints_.b_equation_of_motion_constraint = true;
+  SolverConstraints_.b_fixed_contact_condition_constraint = false;
+  SolverConstraints_.b_actuation_limits_constraint = true;
+  SolverConstraints_.b_contact_stability_constraint = false;
 
   return true;
 }
@@ -449,23 +469,37 @@ update(const ros::Time& time, const ros::Duration& period)
   std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
     twist.angular.x, twist.angular.y, twist.angular.z};
 
+  // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
-                         // curr_contact_frame_names);
-                         {});
+                         curr_contact_frame_names);
+  // Set the solver constraints
   solver_->ClearConstraints();
-  solver_->PushConstraint(QpFormulation::ConstraintName::EQUATION_OF_MOTION);
-  // solver_->PushConstraint(QpFormulation::ConstraintName::FIXED_CONTACT_CONDITION);
-  solver_->PushConstraint(QpFormulation::ConstraintName::ACTUATION_LIMITS);
-  // solver_->PushConstraint(QpFormulation::ConstraintName::CONTACT_STABILITY;
+  if (SolverConstraints_.b_equation_of_motion_constraint)
+    solver_->PushConstraint(QpFormulation::ConstraintName::EQUATION_OF_MOTION);
+  if (SolverConstraints_.b_fixed_contact_condition_constraint)
+    solver_->PushConstraint(QpFormulation::ConstraintName::FIXED_CONTACT_CONDITION);
+  if (SolverConstraints_.b_actuation_limits_constraint)
+    solver_->PushConstraint(QpFormulation::ConstraintName::ACTUATION_LIMITS);
+  if (SolverConstraints_.b_contact_stability_constraint)
+    solver_->PushConstraint(QpFormulation::ConstraintName::CONTACT_STABILITY);
+  // Set the desired state
   solver_->SetPositionErrors(state_error_.position);
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
+  // Build and solve the problem
   solver_->BuildProblem();
   solver_->SolveProblem();
 
   // Copy solution to desired_state_
   Eigen::VectorXd sol = solver_->GetSolution();
+  std::cout << "SolverConstraints_: " << std::boolalpha << 
+    SolverConstraints_.b_equation_of_motion_constraint << ' ' <<
+    SolverConstraints_.b_fixed_contact_condition_constraint << ' ' <<
+    SolverConstraints_.b_actuation_limits_constraint << ' ' << 
+    SolverConstraints_.b_contact_stability_constraint << '\n';
+
+  std::cout << "Number of constraints: " << solver_->GetNumConstraints() << '\n';
   std::cout << "Torques: " << sol.tail(12).transpose() << '\n';
   desired_state_.acceleration = std::vector<double>(sol.data() + sol.size() - joints_.size(),
 						    sol.data() + sol.size());
@@ -824,6 +858,34 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::paramKvCB(double new_kv)
 {
   solver_->SetKV(new_kv);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramEquationOfMotion(bool activate)
+{
+  SolverConstraints_.b_equation_of_motion_constraint = activate;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramFixedContactCondition(bool activate)
+{
+  SolverConstraints_.b_fixed_contact_condition_constraint = activate;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramActuationLimits(bool activate)
+{
+  SolverConstraints_.b_actuation_limits_constraint = activate;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramContactStability(bool activate)
+{
+  SolverConstraints_.b_contact_stability_constraint = activate;
 }
 
 } // namespace

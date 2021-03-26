@@ -74,7 +74,7 @@ QpFormulation::QpFormulation()
 
     // If the number of contacts has changed, the problem cannot be warm started
     // TODO: Warm start using the past information?
-    if (contact_names.size() != contact_names_.size()) {
+    if (bWarmStart and A_.rows() != GetNumConstraints()) {
       bWarmStart = false;
     }
 
