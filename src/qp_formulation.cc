@@ -21,7 +21,7 @@ namespace talos_wbc_controller {
 
 QpFormulation::QpFormulation()
     : joint_task_weight_(0.5), Kp_(100.0), Kv_(0.05), mu_(0.4),
-      bWarmStart(false), active_constraints_{} {
+      bWarmStart_(false), active_constraints_{}, last_num_constraints_(0) {
   // Create model and data objects
   model_ = std::make_shared<Model>();
 
@@ -72,13 +72,7 @@ QpFormulation::QpFormulation()
       return;
     }
 
-    // If the number of contacts has changed, the problem cannot be warm started
-    // TODO: Warm start using the past information?
-    if (bWarmStart and A_.rows() != GetNumConstraints()) {
-      bWarmStart = false;
-    }
-
-    // Convert to Eigen without copying memory (TODO: Posicion y orientacion son relevantes!(por lo menos rotacion))
+    // Convert to Eigen without copying memory 
     q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
     qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
 
@@ -329,18 +323,39 @@ QpFormulation::QpFormulation()
     UpdateGradientMatrix();
     UpdateBounds();
     UpdateLinearConstraints();
+
+    auto current_num_constraints = GetNumConstraints();
+    if (last_num_constraints_ != current_num_constraints) {
+      bWarmStart_ = false;
+      last_num_constraints_ = current_num_constraints;
+    }
+
+    // ROS_INFO("P shape: (%ld, %ld)", P_.rows(), P_.cols());
+    // ROS_INFO("g shape: (%ld)", g_.size());
+    // ROS_INFO("A shape: (%ld, %ld)", A_.rows(), A_.cols());
+    // ROS_INFO("l shape: (%ld)", l_.size());
+    // ROS_INFO("u shape: (%ld)", u_.size());
   }
 
   void
   QpFormulation::SolveProblem(void)
   {
-    if (bWarmStart) {
+    if (bWarmStart_) {
       // Update the problem
       if (not solver_.updateHessianMatrix(P_)) std::runtime_error("Could not update Hessian matrix!");
       if (not solver_.updateGradient(g_)) std::runtime_error("Could not update gradient matrix!");
       if (not solver_.updateLinearConstraintsMatrix(A_)) std::runtime_error("Could not update linear constraint matrix!");
       if (not solver_.updateBounds(l_, u_)) std::runtime_error("Could not update the bounds!");
     } else {
+      std::cout << "Reseteando el solver!\n";
+
+      // Reset the solver
+      if (solver_.isInitialized()) {
+	solver_.clearSolver();
+	solver_.data()->clearHessianMatrix();
+	solver_.data()->clearLinearConstraintsMatrix();
+      }
+
       // Set the number of variables and constraints
       const int rows = GetNumConstraints();
       const int cols = GetNumVariables();
@@ -357,7 +372,7 @@ QpFormulation::QpFormulation()
       // Init the solver
       if (not solver_.initSolver()) std::runtime_error("Fail initializing solver!");
       // Set the next iteration to be warm started
-      bWarmStart = true;
+      bWarmStart_ = true;
     }
 
     // Solve the QP problem
@@ -370,14 +385,15 @@ QpFormulation::QpFormulation()
   void
   QpFormulation::SetSolverParameters(void)
   {
-    solver_.settings()->setWarmStart(bWarmStart);
+    solver_.settings()->setWarmStart(bWarmStart_);
     solver_.settings()->setAlpha(1.0);
+    solver_.settings()->setVerbosity(false);
   }
 
   void
   QpFormulation::ResetWarmStart(void)
   {
-    bWarmStart = false;
+    bWarmStart_ = false;
   }
 
   Eigen::VectorXd

@@ -186,7 +186,7 @@ private:
   /// QP Solver instance
   OsqpEigen::Solver solver_;
   /// Used to decide if warm start the problem with the previous solution
-  bool bWarmStart;
+  bool bWarmStart_;
   /// QP Hessian matrix
   Eigen::SparseMatrix<double> P_;
   /// Gradient matrix
@@ -229,8 +229,11 @@ private:
 
   // Saves the last solution
   Eigen::VectorXd solution_;
+
+  // Saves the number of constraints in the most recent solved problem
+  int last_num_constraints_;
 };
 
-}
+} // namespace talos_wbc_controller
 
 #endif /* QP_FORMULATION_H */
