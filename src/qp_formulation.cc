@@ -98,9 +98,9 @@ QpFormulation::QpFormulation()
     for (const auto id : contact_frames_ids_) {
       Eigen::MatrixXd J(6, model_->nv); J.setZero();
       pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
-				      pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED,
+				      pinocchio::ReferenceFrame::WORLD,
 				      J);
-      contact_jacobians_.push_back(J);
+      contact_jacobians_.push_back(J.block(0, 0, 3, model_->nv));   // Ignore the contact wrenches
     }
   }
 
@@ -239,9 +239,9 @@ QpFormulation::QpFormulation()
   {
     // Calculate the stacked contact jacobian
     size_t n_jac = contact_frames_ids_.size();
-    Eigen::MatrixXd J(6 * n_jac, model_->nv); J.setZero();
+    Eigen::MatrixXd J(3 * n_jac, model_->nv); J.setZero();
     for (size_t i = 0; i < n_jac; ++i) {
-      J.block(i * 6, 0, 6, model_->nv) = contact_jacobians_[i];
+      J.block(i * 3, 0, 3, model_->nv) = contact_jacobians_[i];
     }
 
     // Initialize new sparse matrix to 0
@@ -250,8 +250,8 @@ QpFormulation::QpFormulation()
     A_.resize(rows, cols); A_.data().squeeze();
     // Reserve memory
     Eigen::VectorXi n_values_per_col(cols);
-    n_values_per_col << Eigen::VectorXi::Constant(model_->nv, model_->nv + 6*n_jac),
-      Eigen::VectorXi::Constant(6*n_jac, model_->nv + 5), // 5 not multplied by n_jac (only one contact per force)
+    n_values_per_col << Eigen::VectorXi::Constant(model_->nv, model_->nv + 3*n_jac),
+      Eigen::VectorXi::Constant(3*n_jac, model_->nv + 5), // 5 not multplied by n_jac (only one contact per force)
       Eigen::VectorXi::Constant((model_->njoints - 2), model_->nv + 1); // 1 for Identity matrix
     A_.reserve(n_values_per_col);
 
@@ -285,7 +285,7 @@ QpFormulation::QpFormulation()
 	break;
       case ConstraintName::ACTUATION_LIMITS:
 	diagonal_insert_in_A(Eigen::VectorXd::Constant(model_->njoints - 2, 1.0),
-			     current_row, model_->nv + 6*n_jac);
+			     current_row, model_->nv + 3*n_jac);
 	current_row += model_->njoints - 2;
 	break;
       case ConstraintName::CONTACT_STABILITY: {
@@ -294,15 +294,15 @@ QpFormulation::QpFormulation()
 	  Eigen::Vector3d ti(1.0, 0.0, 0.0), bi(0.0, 1.0, 0.0),
 	      ni(0.0, 0.0, 1.0);
 	  Eigen::MatrixXd friction =
-	      Eigen::MatrixXd::Zero(5 * n_jac, 6 * n_jac);
+	      Eigen::MatrixXd::Zero(5 * n_jac, 3 * n_jac);
 	  for (size_t i = 0; i < n_jac; ++i) {
 	    // Force pointing upwards (negative to keep all bounds equal)
-	    friction.block<1, 3>(i * 5, i * 6) = -ni;
+	    friction.block<1, 3>(i * 5, i * 3) = -ni;
 	    // Aproximate friction cone
-	    friction.block<1, 3>(i * 5 + 1, i * 6) = (ti - mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 2, i * 6) = (ti + mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 3, i * 6) = (bi - mu_ * ni);
-            friction.block<1, 3>(i * 5 + 4, i * 6) = (bi + mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 1, i * 3) = (ti - mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 2, i * 3) = (ti + mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 3, i * 3) = (bi - mu_ * ni);
+            friction.block<1, 3>(i * 5 + 4, i * 3) = (bi + mu_ * ni);
           }
 
 	  insert_in_A(friction, current_row, model_->nv);
@@ -406,7 +406,7 @@ QpFormulation::QpFormulation()
   QpFormulation::GetNumVariables(void) const
   {
     const int n_jac = contact_frames_ids_.size();
-    return model_->nv + 6 * n_jac + (model_->njoints - 2);
+    return model_->nv + 3 * n_jac + (model_->njoints - 2);
   }
 
   int
@@ -439,7 +439,7 @@ QpFormulation::QpFormulation()
       else
 	return 0;
     case ConstraintName::FIXED_CONTACT_CONDITION:
-      return 6 * contact_frames_ids_.size();
+      return 3 * contact_frames_ids_.size();
     case ConstraintName::ACTUATION_LIMITS:
       if (model_)
 	return model_->njoints - 2;
@@ -458,7 +458,7 @@ QpFormulation::QpFormulation()
     const int n_jac = contact_frames_ids_.size();
     Eigen::VectorXd dJqd;
     if (n_jac > 0) {
-      dJqd = Eigen::VectorXd(n_jac * 6); // Reserve memory
+      dJqd = Eigen::VectorXd(n_jac * 3); // Reserve memory
 
       // Compute the needed forward kinematics for the current robot state
       pinocchio::forwardKinematics(*model_, *data_, q_, qd_, 0 * qd_);
@@ -466,8 +466,8 @@ QpFormulation::QpFormulation()
       for (size_t i = 0; i < n_jac; ++i) {
 	auto a = pinocchio::getFrameClassicalAcceleration(
 	    *model_, *data_, contact_frames_ids_[i],
-	    pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED);
-	dJqd.segment(i * 6, 6) << a.linear(), a.angular();
+	    pinocchio::ReferenceFrame::WORLD);
+	dJqd.segment(i * 3, 3) << a.linear();
       }
 
     } else {
