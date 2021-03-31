@@ -13,6 +13,8 @@
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/kinematics-derivatives.hpp>
+#include <pinocchio/algorithm/center-of-mass.hpp>
+#include <pinocchio/algorithm/center-of-mass-derivatives.hpp>
 
 #include <ros/ros.h>
 #include <ros/package.h>
@@ -475,6 +477,25 @@ QpFormulation::QpFormulation()
     }
 
     return dJqd;
+  }
+
+  Eigen::VectorXd
+  QpFormulation::ComputeCoM(void) const
+  {
+    // Compute the CenterOfMass
+    auto com = pinocchio::getComFromCrba(*model_, *data_);
+
+    // Return the corresponding Eigen Vector
+    Eigen::VectorXd com_v(3);
+    com_v << com.x(), com.y(), com.z();
+    return com_v;
+  }
+
+  Eigen::MatrixXd
+  QpFormulation::ComputeCoMJacobian(void) const
+  {
+    pinocchio::getJacobianComFromCrba(*model_, *data_);
+    return data_->Jcom;
   }
 
 } // namespace talos_wbc_controller

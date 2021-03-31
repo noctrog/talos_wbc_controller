@@ -149,6 +149,20 @@ private:
    */
   Eigen::MatrixXd ComputedJqd(void) const;
 
+  /**
+   * @brief Computes the center of mass of the robot with respect to WORLD.
+   *
+   * You need to call @ref SetRobotState first.
+   */
+  Eigen::VectorXd ComputeCoM(void) const;
+
+  /**
+   * @brief Compute and returns the center of mass jacobian with respect to WORLD.
+   *
+   * You need to call @ref SetRobotState first.
+   */
+  Eigen::MatrixXd ComputeCoMJacobian(void) const;
+
   // QP Formulation
   /** 
    * @brief Initializes the solver parameters
