@@ -46,16 +46,17 @@ QpFormulation::QpFormulation()
   // Initialize pinocchio model data
   data_ = std::make_shared<pinocchio::Data>(*model_);
 
+  const int njoints = model_->njoints - 2;
   // Compute the selection matrix, which remains always constant
-  S_ = Eigen::MatrixXd((model_->njoints - 2), model_->nv);
-  S_ << Eigen::MatrixXd::Zero((model_->njoints - 2), 6),
-      Eigen::MatrixXd::Identity((model_->njoints - 2), (model_->njoints - 2));
+  S_ = Eigen::MatrixXd(njoints, model_->nv);
+  S_ << Eigen::MatrixXd::Zero(njoints, 6),
+      Eigen::MatrixXd::Identity(njoints, njoints);
 
   // TODO: Actuation limits
-  u_max_ = Eigen::VectorXd::Constant((model_->njoints - 2), 1000.0);
+  u_max_ = Eigen::VectorXd::Constant(njoints, 1000.0);
 
-  q_ = Eigen::VectorXd::Constant((model_->njoints - 2) + 7, 0.0);
-  qd_ = Eigen::VectorXd::Constant((model_->njoints - 2) + 6, 0.0);
+  q_ = Eigen::VectorXd::Constant(njoints + 7, 0.0);
+  qd_ = Eigen::VectorXd::Constant(njoints + 6, 0.0);
 
   // Initialize the QP solver
   SetSolverParameters();
