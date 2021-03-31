@@ -22,7 +22,7 @@
 namespace talos_wbc_controller {
 
 QpFormulation::QpFormulation()
-    : joint_task_weight_(0.5), Kp_(100.0), Kv_(0.05), mu_(0.4),
+    : joint_task_weight_(0.5), Kp_(10000.0), Kv_(0.05), mu_(0.4),
       bWarmStart_(false), active_constraints_{}, last_num_constraints_(0) {
   // Create model and data objects
   model_ = std::make_shared<Model>();

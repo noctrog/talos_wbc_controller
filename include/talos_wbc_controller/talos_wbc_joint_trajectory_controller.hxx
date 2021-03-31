@@ -270,19 +270,19 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
   // Controller parameters
-  ddr_->registerVariable<double>("Kp", 1000.0,
+  ddr_->registerVariable<double>("Kp", 10000.0,
 				boost::bind(&JointTrajectoryWholeBodyController::paramKpCB, this, _1),
 				"Position constant for the QP problem",
-				0.0, 2e5);
+				0.0, 2e4);
   ddr_->registerVariable<double>("Kv", 0.0,
 				boost::bind(&JointTrajectoryWholeBodyController::paramKvCB, this, _1),
 				"Velocity constant for the QP problem",
-				0.0, 1e4);
+				0.0, 500);
   // Controller constraints
   ddr_->registerVariable<bool>("equation_of_motion", true,
 			       boost::bind(&JointTrajectoryWholeBodyController::paramEquationOfMotion, this, _1),
 			       "Activates the equation of motion constraint.");
-  ddr_->registerVariable<bool>("fixed_contact_condition", false,
+  ddr_->registerVariable<bool>("fixed_contact_condition", true,
 			       boost::bind(&JointTrajectoryWholeBodyController::paramFixedContactCondition, this, _1),
 			       "Activates the fixed contact condition constraint.");
   ddr_->registerVariable<bool>("actuation_limits", true,
@@ -295,7 +295,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
   // TODO: ddr does not set automatically in the beginning?
   SolverConstraints_.b_equation_of_motion_constraint = true;
-  SolverConstraints_.b_fixed_contact_condition_constraint = false;
+  SolverConstraints_.b_fixed_contact_condition_constraint = true;
   SolverConstraints_.b_actuation_limits_constraint = true;
   SolverConstraints_.b_contact_stability_constraint = false;
 
