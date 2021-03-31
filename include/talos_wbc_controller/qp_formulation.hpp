@@ -163,6 +163,13 @@ private:
    */
   Eigen::MatrixXd ComputeCoMJacobian(void) const;
 
+  /**
+   * @brief Compute and returns the center of mass time jacobian with respect to WORLD.
+   *
+   * You need to call @ref SetRobotState and @ref ComputeCoM first, respectively.
+   */
+  Eigen::MatrixXd ComputeCoMJacobianTimeVariation(void) const;
+
   // QP Formulation
   /** 
    * @brief Initializes the solver parameters

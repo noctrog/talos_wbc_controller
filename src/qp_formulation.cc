@@ -483,7 +483,7 @@ QpFormulation::QpFormulation()
   QpFormulation::ComputeCoM(void) const
   {
     // Compute the CenterOfMass
-    auto com = pinocchio::getComFromCrba(*model_, *data_);
+    auto com = pinocchio::centerOfMass(*model_, *data_, q_, qd_);
 
     // Return the corresponding Eigen Vector
     Eigen::VectorXd com_v(3);
@@ -496,6 +496,14 @@ QpFormulation::QpFormulation()
   {
     pinocchio::getJacobianComFromCrba(*model_, *data_);
     return data_->Jcom;
+  }
+
+  Eigen::MatrixXd
+  QpFormulation::ComputeCoMJacobianTimeVariation(void) const
+  {
+    Eigen::MatrixXd dJ;
+    pinocchio::getCenterOfMassVelocityDerivatives(*model_, *data_, dJ);
+    return dJ;
   }
 
 } // namespace talos_wbc_controller
