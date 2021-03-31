@@ -15,6 +15,7 @@
 #include <pinocchio/algorithm/kinematics-derivatives.hpp>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/center-of-mass-derivatives.hpp>
+#include <pinocchio/algorithm/centroidal.hpp>
 
 #include <ros/ros.h>
 #include <ros/package.h>
@@ -502,9 +503,11 @@ QpFormulation::QpFormulation()
   Eigen::MatrixXd
   QpFormulation::ComputeCoMJacobianTimeVariation(void) const
   {
-    Eigen::MatrixXd dJ;
-    pinocchio::getCenterOfMassVelocityDerivatives(*model_, *data_, dJ);
-    return dJ;
+    // https://github.com/stack-of-tasks/pinocchio/issues/1297
+    Eigen::MatrixXd dJ(3, model_->nv); dJ.setZero();
+    auto dAg = pinocchio::computeCentroidalMapTimeVariation(*model_, *data_, q_, qd_);
+    auto dJcom = dAg.block(0, 0, 3, model_->nv) / data_->mass[0];
+    return dJcom;
   }
 
 } // namespace talos_wbc_controller
