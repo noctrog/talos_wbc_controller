@@ -493,14 +493,7 @@ update(const ros::Time& time, const ros::Duration& period)
 
   // Copy solution to desired_state_
   Eigen::VectorXd sol = solver_->GetSolution();
-  std::cout << "SolverConstraints_: " << std::boolalpha << 
-    SolverConstraints_.b_equation_of_motion_constraint << ' ' <<
-    SolverConstraints_.b_fixed_contact_condition_constraint << ' ' <<
-    SolverConstraints_.b_actuation_limits_constraint << ' ' << 
-    SolverConstraints_.b_contact_stability_constraint << '\n';
 
-  std::cout << "Number of constraints: " << solver_->GetNumConstraints() << '\n';
-  std::cout << "Torques: " << sol.tail(12).transpose() << '\n';
   desired_state_.acceleration = std::vector<double>(sol.data() + sol.size() - joints_.size(),
 						    sol.data() + sol.size());
 
