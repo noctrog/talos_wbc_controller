@@ -303,10 +303,10 @@ QpFormulation::QpFormulation()
 	    // Force pointing upwards (negative to keep all bounds equal)
 	    friction.block<1, 3>(i * 5, i * 3) = -ni;
 	    // Aproximate friction cone
-	    friction.block<1, 3>(i * 5 + 1, i * 3) = (ti - mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 2, i * 3) = (ti + mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 3, i * 3) = (bi - mu_ * ni);
-            friction.block<1, 3>(i * 5 + 4, i * 3) = (bi + mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 1, i * 3) =  (ti - mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 2, i * 3) = -(ti + mu_ * ni);
+	    friction.block<1, 3>(i * 5 + 3, i * 3) =  (bi - mu_ * ni);
+            friction.block<1, 3>(i * 5 + 4, i * 3) = -(bi + mu_ * ni);
           }
 
 	  insert_in_A(friction, current_row, model_->nv);
