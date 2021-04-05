@@ -23,7 +23,7 @@
 namespace talos_wbc_controller {
 
 QpFormulation::QpFormulation()
-    : joint_task_weight_(0.5), Kp_(10000.0), Kv_(0.05), mu_(0.4),
+  : task_weight_{0.5, 0.5}, Kp_(10000.0), Kv_(0.05), mu_(0.4),
       bWarmStart_(false), active_constraints_{}, last_num_constraints_(0) {
   // Create model and data objects
   model_ = std::make_shared<Model>();
@@ -65,7 +65,8 @@ QpFormulation::QpFormulation()
 
   void
   QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
-			       const JointPos& q, const JointVel& qd, const ContactNames contact_names)
+			       const JointPos& q, const JointVel& qd,
+			       const ContactNames contact_names)
   {
     if (base_pos.size() != 7 or base_vel.size() != 6) {
       ROS_ERROR("SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively");
@@ -106,6 +107,22 @@ QpFormulation::QpFormulation()
 				      J);
       contact_jacobians_.push_back(J.block(0, 0, 3, model_->nv));   // Ignore the contact wrenches
     }
+
+    // Center of mass computations
+    // This computes de CoM position and velocity, as well as the term
+    // dJ * dq, where dJ is the jacobian of the center of mass. dJ *
+    // qd is accessible through data_->acom[0]. This is based in the
+    // same principle used in the method QpFormulation::computedJqd
+    pinocchio::centerOfMass(*model_, *data_, q_, qd_, 0*qd_);
+    // Compute the CoM jacobian
+    pinocchio::jacobianCenterOfMass(*model_, *data_, q_);
+  }
+
+  void
+  QpFormulation::SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel)
+  {
+    des_com_pos_ << Eigen::VectorXd::Map(com_pos.data(), com_pos.size());
+    des_com_vel_ << Eigen::VectorXd::Map(com_vel.data(), com_vel.size());
   }
 
   void
@@ -167,10 +184,18 @@ QpFormulation::QpFormulation()
     Eigen::SparseMatrix<double> P_joint_task(cols, cols);
     P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
 
-    // TODO: Center of mass task
+    // Center of mass task
+    Eigen::SparseMatrix<double> P_com_task(cols, cols);
+    auto insert_in_sparse = [](Eigen::SparseMatrix<double> S, const Eigen::MatrixXd &m, int i, int j) {
+      for (size_t x = 0; x < m.rows(); ++x)
+	for (size_t y = 0; y < m.cols(); ++y)
+	  S.insert(i + x, j + y) = m(x, y);
+    };
+    const auto& Jcom = data_->Jcom;
+    insert_in_sparse(P_com_task, Jcom.transpose() * Jcom, 0, 0);
 
     // Join all tasks
-    P_ = P_joint_task * (joint_task_weight_ / 2.0);
+    P_ = P_joint_task * task_weight_.joint + P_com_task * task_weight_.com;
   }
 
   void
@@ -187,12 +212,18 @@ QpFormulation::QpFormulation()
     // Calculate joint gradient matrix
     Eigen::VectorXd q_joint(cols);
     q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp_ * ep + Kv_ * ev),
-      Eigen::VectorXd::Constant(cols - 6 - ep.size(), 0.0);
+      Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
 
-    // TODO: Center of mass task
+    // Center of mass task
+    Eigen::VectorXd q_com(cols);
+    const auto& dJqd = data_->acom[0];
+    const auto& ep_m = des_com_pos_ - data_->com[0];
+    const auto& ev_m = des_com_vel_ - data_->vcom[0];
+    q_com << (dJqd + Kp_ * ep_m + Kv_ * ev_m).transpose() * data_->Jcom,
+      Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
 
     // Join all tasks
-    g_ = q_joint * joint_task_weight_;
+    g_ = q_joint * task_weight_.joint + q_com * task_weight_.com;
   }
 
   void

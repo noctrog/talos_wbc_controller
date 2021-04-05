@@ -32,6 +32,8 @@ public:
   typedef std::vector<double> SpatialVel;
   typedef std::vector<double> JointPos;
   typedef std::vector<double> JointVel;
+  typedef std::vector<double> ComPos;
+  typedef std::vector<double> ComVel;
   // Robot feedback
   typedef std::vector<double> PosErrors;
   typedef std::vector<double> VelErrors;
@@ -54,7 +56,8 @@ public:
    * time derivative.
    */
   void SetRobotState(const SpatialPos&, const SpatialVel&,
-		     const JointPos&, const JointVel&, const ContactNames);
+		     const JointPos&, const JointVel&,
+		     const ContactNames);
 
   // Joint state task
   /** 
@@ -71,6 +74,11 @@ public:
    * Sets the reference acceleration, used to calculate the desired acceleration.
    */
   void SetReferenceAccelerations(const AccVector&);
+
+  /**
+   * Sets the reference for the CoM
+   */
+  void SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel);
 
   /** 
    * Sets the Kp constant that multiplies the position error. Used to
@@ -223,7 +231,10 @@ private:
   ConstraintList active_constraints_;
 
   // Joint state task
-  Weight joint_task_weight_;
+  struct {
+    Weight joint;
+    Weight com;
+  } task_weight_;
   PosErrors ep_;
   VelErrors ev_;
   AccVector qrdd_;
@@ -244,6 +255,8 @@ private:
 
   // Joint states
   Eigen::VectorXd q_, qd_;
+  // Desired CoM pos and vel
+  Eigen::VectorXd des_com_pos_, des_com_vel_;
 
   // Joint actuator limits
   Eigen::VectorXd u_max_;
