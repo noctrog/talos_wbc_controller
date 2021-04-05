@@ -288,7 +288,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   ddr_->registerVariable<bool>("actuation_limits", true,
 			       boost::bind(&JointTrajectoryWholeBodyController::paramActuationLimits, this, _1),
 			       "Activates the actuation limits constraint.");
-  ddr_->registerVariable<bool>("contact_stability", false,
+  ddr_->registerVariable<bool>("contact_stability", true,
 			       boost::bind(&JointTrajectoryWholeBodyController::paramContactStability, this, _1),
 			       "Set the equation of motion constraint.");
   ddr_->publishServicesTopics();
@@ -297,7 +297,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   SolverConstraints_.b_equation_of_motion_constraint = true;
   SolverConstraints_.b_fixed_contact_condition_constraint = true;
   SolverConstraints_.b_actuation_limits_constraint = true;
-  SolverConstraints_.b_contact_stability_constraint = false;
+  SolverConstraints_.b_contact_stability_constraint = true;
 
   return true;
 }
