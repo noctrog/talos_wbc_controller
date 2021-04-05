@@ -121,8 +121,8 @@ QpFormulation::QpFormulation()
   void
   QpFormulation::SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel)
   {
-    des_com_pos_ << Eigen::VectorXd::Map(com_pos.data(), com_pos.size());
-    des_com_vel_ << Eigen::VectorXd::Map(com_vel.data(), com_vel.size());
+    des_com_pos_ = Eigen::VectorXd::Map(com_pos.data(), com_pos.size());
+    des_com_vel_ = Eigen::VectorXd::Map(com_vel.data(), com_vel.size());
   }
 
   void
