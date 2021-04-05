@@ -190,6 +190,9 @@ private:
   TrajectoryBox curr_trajectory_box_;
   TrajectoryPtr hold_trajectory_ptr_; ///< Last hold trajectory values.
 
+  TrajectoryBox curr_com_trajectory_box_;
+  TrajectoryPtr hold_com_trajectory_ptr_;
+
   ContactTrajectoryBox curr_contact_trajectory_box_;
   ContactTrajectoryPtr hold_contact_trajectory_ptr_;
 

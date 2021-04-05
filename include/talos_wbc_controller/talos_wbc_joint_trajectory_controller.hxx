@@ -93,6 +93,7 @@ JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapt
 JointTrajectoryWholeBodyController()
   : verbose_(false), // Set to true during debugging
     hold_trajectory_ptr_(new Trajectory),
+    hold_com_trajectory_ptr_(new Trajectory),
     hold_contact_trajectory_ptr_(new ContactTrajectory),
     solver_(new Solver)
 {
@@ -240,6 +241,18 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 	  hold_trajectory_ptr_->push_back(joint_segment);
   }
 
+  // Initialize CoM trajectory
+  typename Segment::State current_axis_state_ = typename Segment::State(1);
+  for (unsigned int i = 0; i < n_joints; ++i) {
+    current_axis_state_.position[0] = (i == 2) ? 1.0 : 0.0;
+    current_axis_state_.velocity[0] = 0.0;
+    Segment hold_segment(0.0, current_axis_state_, 0.0, current_axis_state_);
+
+    TrajectoryPerJoint axis_segment;
+    axis_segment.resize(1, hold_segment);
+    hold_com_trajectory_ptr_->push_back(axis_segment);
+  }
+
   // Initialize contacts
   contact_link_names_ = {"left_sole_link", "right_sole_link"}; // Both feet are on the ground
   for (unsigned int i = 0; i < 2; ++i) {
@@ -313,6 +326,9 @@ update(const ros::Time& time, const ros::Duration& period)
   TrajectoryPtr curr_traj_ptr;
   curr_trajectory_box_.get(curr_traj_ptr);
   Trajectory& curr_traj = *curr_traj_ptr;
+  TrajectoryPtr curr_com_traj_ptr;
+  curr_com_trajectory_box_.get(curr_com_traj_ptr);
+  Trajectory& curr_com_traj = *curr_traj_ptr;
   ContactTrajectoryPtr curr_contact_traj_ptr;
   curr_contact_trajectory_box_.get(curr_contact_traj_ptr);
   ContactTrajectory& curr_contact_traj = *curr_contact_traj_ptr;
@@ -348,8 +364,7 @@ update(const ros::Time& time, const ros::Duration& period)
     }
   }
 
-
-  // Update current state and state error
+  // Update current joint state and state error
   for (unsigned int i = 0; i < joints_.size(); ++i)
   {
     current_state_.position[i] = joints_[i].getPosition();
@@ -450,6 +465,31 @@ update(const ros::Time& time, const ros::Duration& period)
     }
   }
 
+  // Update current CoM state and state error
+  typename Segment::State com_state[3];
+  // for (unsigned int i = joints_.size(); i < current_state_.positions.size(); ++i) {
+  for (unsigned int i = 0; i < 3; ++i) { // CoM x, y, z
+    typename TrajectoryPerJoint::const_iterator segment_it
+      = sample(curr_com_traj[i], time_data.uptime.toSec(), com_state[i]);
+    if (curr_com_traj[i].end() == segment_it)
+    {
+      // Non-realtime safe, but should never happen under normal operation
+      ROS_ERROR_NAMED(name_,
+                      "Unexpected error: No trajectory defined at current time. Please contact the package maintainer.");
+      return;
+    }
+  }
+
+  // Robot base link current state 
+  const auto& pose = last_base_link_state_.pose.pose;
+  const auto& twist = last_base_link_state_.twist.twist;
+  std::vector<double> base_pos {pose.position.x, pose.position.y, pose.position.z,
+    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w};
+  std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
+    twist.angular.x, twist.angular.y, twist.angular.z};
+
+  QpFormulation::ComPos com_pos { com_state[0].position[0], com_state[1].position[0], com_state[2].position[0] };
+  QpFormulation::ComVel com_vel { com_state[0].velocity[0], com_state[1].velocity[0], com_state[2].velocity[0] };
 
   //If there is an active goal and all segments finished successfully then set goal as succeeded
   RealtimeGoalHandlePtr current_active_goal(rt_active_goal_);
@@ -461,14 +501,8 @@ update(const ros::Time& time, const ros::Duration& period)
     successful_joint_traj_.reset();
   }
 
-  // Solve QP problem
-  const auto& pose = last_base_link_state_.pose.pose;
-  const auto& twist = last_base_link_state_.twist.twist;
-  std::vector<double> base_pos {pose.position.x, pose.position.y, pose.position.z,
-    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w};
-  std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
-    twist.angular.x, twist.angular.y, twist.angular.z};
 
+  // Solve QP problem
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
@@ -487,6 +521,7 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->SetPositionErrors(state_error_.position);
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
+  solver_->SetDesiredCoM(com_pos, com_vel);
   // Build and solve the problem
   solver_->BuildProblem();
   solver_->SolveProblem();
@@ -563,12 +598,15 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
   // Trajectory initialization options
   TrajectoryPtr curr_traj_ptr;
   curr_trajectory_box_.get(curr_traj_ptr);
+  TrajectoryPtr curr_com_traj_ptr;
+  curr_com_trajectory_box_.get(curr_com_traj_ptr);
   ContactTrajectoryPtr curr_cont_traj_ptr;
   curr_contact_trajectory_box_.get(curr_cont_traj_ptr);
 
   Options options;
   options.other_time_base            = &next_update_uptime;
   options.current_trajectory         = curr_traj_ptr.get();
+  options.current_com_trajectory     = curr_com_traj_ptr.get();
   options.current_contact_trajectory = curr_cont_traj_ptr.get();
   options.joint_names                = &joint_names_;
   options.angle_wraparound           = &angle_wraparound_;
@@ -580,12 +618,15 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
   try
   {
     TrajectoryPtr traj_ptr(new Trajectory);
+    TrajectoryPtr com_traj_ptr(new Trajectory);
     ContactTrajectoryPtr cont_traj_ptr(new ContactTrajectory);
     initContactJointTrajectory<Trajectory, ContactTrajectory> (*msg, next_update_time,
-							       *traj_ptr, *cont_traj_ptr, options);
+							       *traj_ptr, *com_traj_ptr, *cont_traj_ptr,
+							       options);
     if (!traj_ptr->empty())
     {
       curr_trajectory_box_.set(traj_ptr);
+      curr_com_trajectory_box_.set(com_traj_ptr);
       curr_contact_trajectory_box_.set(cont_traj_ptr);
     }
     else
@@ -630,6 +671,15 @@ goalCB(GoalHandle gh)
     if (gh.getGoal()->trajectory.trajectory.joint_names.size() != joint_names_.size())
     {
       ROS_ERROR_NAMED(name_, "Joints on incoming goal don't match the controller joints.");
+      talos_wbc_controller::FollowContactJointTrajectoryResult result;
+      result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_JOINTS;
+      gh.setRejected(result);
+      return;
+    }
+
+    // TODO: make this optional?
+    if (gh.getGoal()->trajectory.com_trajectory.joint_names.size() != 3) {
+      ROS_ERROR_NAMED(name_, "The CoM trajectory must have 3 channels");
       talos_wbc_controller::FollowContactJointTrajectoryResult result;
       result.error_code = talos_wbc_controller::FollowContactJointTrajectoryResult::INVALID_JOINTS;
       gh.setRejected(result);
@@ -792,6 +842,7 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
   // NOTE: The symmetry assumption from the second point above might not hold for all possible segment types
 
   assert(joint_names_.size() == hold_trajectory_ptr_->size());
+  assert(3 == hold_com_trajectory_ptr_->size());
 
   typename Segment::State hold_start_state_ = typename Segment::State(1);
   typename Segment::State hold_end_state_ = typename Segment::State(1);
@@ -826,8 +877,32 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
     (*hold_trajectory_ptr_)[i].front().setGoalHandle(gh);
   }
 
-  
+  // TODO: Create smooth transition?
+  for (unsigned int i = 0; i < 3; ++i) {
+    // Keep the center of mass at (0, 0, 1.0) by default
+    if (i < 2) {
+      hold_start_state_.position[0] = 0.0;
+      hold_start_state_.velocity[0] = 0.0;
+      hold_start_state_.acceleration[0] = 0.0;
+      hold_end_state_.position[0] = 0.0;
+      hold_end_state_.velocity[0] = 0.0;
+      hold_end_state_.acceleration[0] = 0.0;
+    } else {
+      hold_start_state_.position[0] = 1.0;
+      hold_start_state_.velocity[0] = 0.0;
+      hold_start_state_.acceleration[0] = 0.0;
+      hold_end_state_.position[0] = 1.0;
+      hold_end_state_.velocity[0] = 0.0;
+      hold_end_state_.acceleration[0] = 0.0;
+    }
+
+    (*hold_com_trajectory_ptr_)[i].front().init(start_time, hold_start_state_,
+						end_time, hold_end_state_);
+    (*hold_com_trajectory_ptr_)[i].front().setGoalHandle(gh);
+  }
+
   curr_trajectory_box_.set(hold_trajectory_ptr_);
+  curr_com_trajectory_box_.set(hold_com_trajectory_ptr_);
   curr_contact_trajectory_box_.set(hold_contact_trajectory_ptr_);
 }
 

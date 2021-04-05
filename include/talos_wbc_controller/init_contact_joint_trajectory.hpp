@@ -123,6 +123,7 @@ struct InitContactJointTrajectoryOptions
 
   InitContactJointTrajectoryOptions()
     : current_trajectory(0),
+      current_com_trajectory(0),
       current_contact_trajectory(0),
       joint_names(0),
       angle_wraparound(0),
@@ -133,6 +134,7 @@ struct InitContactJointTrajectoryOptions
   {}
 
   Trajectory*                current_trajectory;
+  Trajectory*                current_com_trajectory;
   ContactTrajectory*         current_contact_trajectory;
   std::vector<std::string>*  joint_names;
   std::vector<bool>*         angle_wraparound;
@@ -256,6 +258,7 @@ void
 initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& msg,
 			   const ros::Time& time,
 			   Trajectory& out_traj,
+			   Trajectory& out_com_traj,
 			   ContactTrajectory& out_contact_traj,
 			   const InitContactJointTrajectoryOptions<Trajectory, ContactTrajectory>& options =
 			   InitContactJointTrajectoryOptions<Trajectory, ContactTrajectory>())
@@ -269,6 +272,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   const unsigned int n_joints = msg.trajectory.joint_names.size();
 
   const ros::Time msg_start_time = internal::startTime(msg.trajectory, time); // Message start time
+  const ros::Time com_msg_start_time = internal::startTime(msg.com_trajectory, time);
 
   ROS_DEBUG_STREAM("Figuring out new trajectory starting at time "
                    << std::fixed << std::setprecision(3) << msg_start_time.toSec());
@@ -278,6 +282,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   {
     ROS_DEBUG("Trajectory message contains empty trajectory. Nothing to convert.");
     out_traj = Trajectory();
+    out_com_traj = Trajectory();
     out_contact_traj = ContactTrajectory();
     return;
   }
@@ -287,6 +292,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   {
     ROS_ERROR("Trajectory message contains waypoints that are not strictly increasing in time.");
     out_traj = Trajectory();
+    out_com_traj = Trajectory();
     out_contact_traj = ContactTrajectory();
     return;
   }
@@ -333,6 +339,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
       ROS_ERROR("Cannot create trajectory from message. "
                 "Vector specifying whether joints wrap around has an invalid size.");
       out_traj = Trajectory();
+      out_com_traj = Trajectory();
       out_contact_traj = ContactTrajectory();
       return;
     }
@@ -345,6 +352,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
     {
       ROS_ERROR("Cannot create trajectory from message. It does not contain the expected joints.");
       out_traj = Trajectory();
+      out_com_traj = Trajectory();
       out_contact_traj = ContactTrajectory();
       return;
     }
@@ -358,6 +366,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   {
     ROS_ERROR("Cannot create trajectory from message. It does not contain the expected joints.");
     out_traj = Trajectory();
+    out_com_traj = Trajectory();
     out_contact_traj = ContactTrajectory();
     return;
   }
@@ -365,6 +374,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   // Tolerances to be used in all new segments
   SegmentTolerances<Scalar> tolerances = has_default_tolerances ?
                                          *(options.default_tolerances) : SegmentTolerances<Scalar>(n_joints);
+  SegmentTolerances<Scalar> com_tolerances { SegmentTolerances<Scalar>(3) };
 
   if (has_rt_goal_handle && options.rt_goal_handle->gh_.getGoal())
   {
@@ -391,12 +401,40 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
                       "Last point is " << std::fixed << std::setprecision(3) << last_point_dur.toSec() <<
                       "s in the past.");
       out_traj = Trajectory();
+      out_com_traj = Trajectory();
       out_contact_traj = ContactTrajectory();
       return;
     } else {
       ros::Duration next_point_dur = msg_start_time + msg_it->time_from_start - time;
       ROS_WARN_STREAM("Dropping first " << std::distance(msg.trajectory.points.begin(), msg_it) <<
                       " trajectory point(s) out of " << msg.trajectory.points.size() <<
+                      ", as they occur before the current time.\n" <<
+                      "First valid point will be reached in " << std::fixed << std::setprecision(3) <<
+                      next_point_dur.toSec() << "s.");
+    }
+  }
+
+  // Find the first point of new com trajectory ocurring after current time
+  std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator com_msg_it =
+    findPoint(msg.com_trajectory, time);
+  if (com_msg_it == msg.com_trajectory.points.end()) {
+    com_msg_it = msg.trajectory.points.begin();   // Entire trajectory is after current time
+  } else {
+    ++com_msg_it;
+    if (com_msg_it == msg.com_trajectory.points.end()) {
+      ros::Duration last_point_dur = time - (com_msg_start_time + (--com_msg_it)->time_from_start);
+      ROS_WARN_STREAM("Dropping all " << msg.com_trajectory.points.size() <<
+                      " trajectory point(s), as they occur before the current time.\n" <<
+                      "Last point is " << std::fixed << std::setprecision(3) << last_point_dur.toSec() <<
+                      "s in the past.");
+      out_traj = Trajectory();
+      out_com_traj = Trajectory();
+      out_contact_traj = ContactTrajectory();
+      return;
+    } else {
+      ros::Duration next_point_dur = com_msg_start_time + com_msg_it->time_from_start - time;
+      ROS_WARN_STREAM("Dropping first " << std::distance(msg.com_trajectory.points.begin(), com_msg_it) <<
+                      " trajectory point(s) out of " << msg.com_trajectory.points.size() <<
                       ", as they occur before the current time.\n" <<
                       "First valid point will be reached in " << std::fixed << std::setprecision(3) <<
                       next_point_dur.toSec() << "s.");
@@ -411,12 +449,14 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   // - Useful segments of currently followed trajectory
   // - Useful segments of new trajectory (contained in ROS message)
   Trajectory result_traj; // Currently empty
+  Trajectory result_com_traj;
   ContactTrajectory result_contact_traj;
 
   // Set active goal to segments after current time
   if (has_current_trajectory)
   {
     result_traj = *(options.current_trajectory);
+    result_com_traj = *(options.current_com_trajectory);
     result_contact_traj = *(options.current_contact_trajectory);
 
     //Iterate to all segments after current time to set the new goal handler
@@ -431,9 +471,21 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
         ++active_seg;
       }
     }
+
+    // Iterate to all com segments after current time to set the new goal handler
+    for (unsigned int id = 0; id < 3; ++id) {
+      const TrajectoryPerJoint& curr_com_axis_traj = result_com_traj[id];
+      TrajIter active_seg = findSegment(curr_com_axis_traj, o_time.toSec()); // Currently active segment
+
+      while (std::distance(active_seg, curr_com_axis_traj.end()) >= 1) {
+	(result_com_traj[id])[std::distance(curr_com_axis_traj.begin(), active_seg)].setGoalHandle(options.rt_goal_handle);
+	++active_seg;
+      }
+    }
   }
   else {
     result_traj.resize(joint_names.size());
+    result_com_traj.resize(3); // x, y, z. 
     result_contact_traj.resize(msg.contact_link_names.size());
   }
 
@@ -657,10 +709,128 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   if (trajIter == result_traj.end())
   {
     result_traj.clear();
+    result_com_traj.clear();
     result_contact_traj.clear();
   }
 
+  // Iterate through the CoM coordinates
+  for (unsigned int msg_com_id = 0; msg_com_id < 3; msg_com_id++)
+  {
+    std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator it = com_msg_it;
+    if (!isValid(*it, it->positions.size()))
+      throw(std::invalid_argument("Size mismatch in trajectory point position, velocity or acceleration data."));
+
+    TrajectoryPerJoint result_traj_per_axis; // Currently empty
+
+    // Initialize offsets due to wrapping joints to zero
+    std::vector<Scalar> position_offset(1, 0.0);
+
+    //Initialize segment tolerance per joint
+    SegmentTolerancesPerJoint<Scalar> tolerances_per_axis;
+    tolerances_per_axis.state_tolerance = com_tolerances.state_tolerance[msg_com_id];
+    tolerances_per_axis.goal_state_tolerance = com_tolerances.goal_state_tolerance[msg_com_id];
+    tolerances_per_axis.goal_time_tolerance = com_tolerances.goal_time_tolerance;
+
+    // Bridge current trajectory to new one
+    if (has_current_trajectory)
+    {
+      const TrajectoryPerJoint& curr_axis_traj = (*options.current_trajectory)[msg_com_id];
+
+      // Get the last time and state that will be executed from the current trajectory
+      const typename Segment::Time last_curr_time = std::max(o_msg_start_time.toSec(), o_time.toSec()); // Important!
+      typename Segment::State last_curr_state;
+      sample(curr_axis_traj, last_curr_time, last_curr_state);
+
+      // Get the first time and state that will be executed from the new trajectory
+      trajectory_msgs::JointTrajectoryPoint point_per_axis;
+      if (!it->positions.empty())     {point_per_axis.positions.resize(1, it->positions[msg_com_id]);}
+      if (!it->velocities.empty())    {point_per_axis.velocities.resize(1, it->velocities[msg_com_id]);}
+      if (!it->accelerations.empty()) {point_per_axis.accelerations.resize(1, it->accelerations[msg_com_id]);}
+      point_per_axis.time_from_start = it->time_from_start;
+
+      const typename Segment::Time first_new_time = o_msg_start_time.toSec() + (it->time_from_start).toSec();
+      typename Segment::State first_new_state(point_per_axis); // Here offsets are not yet applied
+
+      // Apply offset to first state that will be executed from the new trajectory
+      first_new_state = typename Segment::State(point_per_axis, position_offset); // Now offsets are applied
+
+      // Add useful segments of current trajectory to result
+      {
+        TrajIter first = findSegment(curr_axis_traj, o_time.toSec());   // Currently active segment
+        TrajIter last  = findSegment(curr_axis_traj, last_curr_time); // Segment active when new trajectory starts
+        if (first == curr_axis_traj.end() || last == curr_axis_traj.end())
+        {
+          ROS_ERROR("Unexpected error: Could not find segments in current trajectory. Please contact the package maintainer.");
+	  out_traj = Trajectory();
+	  out_com_traj = Trajectory();
+	  out_contact_traj = ContactTrajectory();
+	  return;
+        }
+        result_traj_per_axis.insert(result_traj_per_axis.begin(), first, ++last); // Range [first,last) will still be executed
+      }
+
+      // Add segment bridging current and new trajectories to result
+      Segment bridge_seg(last_curr_time, last_curr_state,
+                         first_new_time, first_new_state);
+      bridge_seg.setGoalHandle(options.rt_goal_handle);
+      if (has_rt_goal_handle) {bridge_seg.setTolerances(tolerances_per_axis);}
+      result_traj_per_axis.push_back(bridge_seg);
+    }
+
+    // Constants used in log statement at the end
+    const unsigned int num_old_segments = result_traj_per_axis.size() -1;
+    const unsigned int num_new_segments = std::distance(it, msg.trajectory.points.end()) -1;
+
+    // Add useful segments of new trajectory to result
+    // - Construct all trajectory segments occurring after current time
+    // - As long as there remain two trajectory points we can construct the next trajectory segment
+    while (std::distance(it, msg.com_trajectory.points.end()) >= 2)
+    {
+      std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator next_it = it; ++next_it;
+
+      trajectory_msgs::JointTrajectoryPoint it_point_per_axis, next_it_point_per_axis;
+
+      if (!isValid(*it, it->positions.size()))
+            throw(std::invalid_argument("Size mismatch in trajectory point position, velocity or acceleration data."));
+      if (!it->positions.empty())     {it_point_per_axis.positions.resize(1, it->positions[msg_com_id]);}
+      if (!it->velocities.empty())    {it_point_per_axis.velocities.resize(1, it->velocities[msg_com_id]);}
+      if (!it->accelerations.empty()) {it_point_per_axis.accelerations.resize(1, it->accelerations[msg_com_id]);}
+      it_point_per_axis.time_from_start = it->time_from_start;
+
+      if (!isValid(*next_it, next_it->positions.size()))
+            throw(std::invalid_argument("Size mismatch in trajectory point position, velocity or acceleration data."));
+      if (!next_it->positions.empty()) {next_it_point_per_axis.positions.resize(1, next_it->positions[msg_com_id]);}
+      if (!next_it->velocities.empty()) {next_it_point_per_axis.velocities.resize(1, next_it->velocities[msg_com_id]);}
+      if (!next_it->accelerations.empty()) {next_it_point_per_axis.accelerations.resize(1, next_it->accelerations[msg_com_id]);}
+      next_it_point_per_axis.time_from_start = next_it->time_from_start;
+
+      Segment segment(o_msg_start_time, it_point_per_axis, next_it_point_per_axis, position_offset);
+      segment.setGoalHandle(options.rt_goal_handle);
+      if (has_rt_goal_handle) {segment.setTolerances(tolerances_per_axis);}
+      result_traj_per_axis.push_back(segment);
+      ++it;
+    }
+
+    // Useful debug info
+    std::stringstream log_str;
+    log_str << "Trajectory of com has " << result_traj_per_axis.size() << " segments";
+    if (has_current_trajectory)
+    {
+      log_str << ":";
+      log_str << "\n- " << num_old_segments << " segment(s) will still be executed from previous trajectory.";
+      log_str << "\n- 1 segment added for transitioning between the current trajectory and first point of the input message.";
+      if (num_new_segments > 0) {log_str << "\n- " << num_new_segments << " new segments (" << (num_new_segments + 1) <<
+                                 " points) taken from the input trajectory.";}
+    }
+    else {log_str << ".";}
+    ROS_DEBUG_STREAM(log_str.str());
+
+    if (result_traj_per_axis.size() > 0)
+      result_com_traj[msg_com_id] = result_traj_per_axis;
+  }
+
   out_traj = result_traj;
+  out_com_traj = result_com_traj;
   out_contact_traj = result_contact_traj;
   return;
 }
