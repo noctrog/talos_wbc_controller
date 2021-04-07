@@ -243,7 +243,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
   // Initialize CoM trajectory
   typename Segment::State current_axis_state_ = typename Segment::State(1);
-  for (unsigned int i = 0; i < n_joints; ++i) {
+  for (unsigned int i = 0; i < 3; ++i) {
     current_axis_state_.position[0] = (i == 2) ? 1.0 : 0.0;
     current_axis_state_.velocity[0] = 0.0;
     Segment hold_segment(0.0, current_axis_state_, 0.0, current_axis_state_);
@@ -328,7 +328,7 @@ update(const ros::Time& time, const ros::Duration& period)
   Trajectory& curr_traj = *curr_traj_ptr;
   TrajectoryPtr curr_com_traj_ptr;
   curr_com_trajectory_box_.get(curr_com_traj_ptr);
-  Trajectory& curr_com_traj = *curr_traj_ptr;
+  Trajectory& curr_com_traj = *curr_com_traj_ptr;
   ContactTrajectoryPtr curr_contact_traj_ptr;
   curr_contact_trajectory_box_.get(curr_contact_traj_ptr);
   ContactTrajectory& curr_contact_traj = *curr_contact_traj_ptr;

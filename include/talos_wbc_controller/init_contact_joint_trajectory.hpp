@@ -278,7 +278,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
                    << std::fixed << std::setprecision(3) << msg_start_time.toSec());
 
   // Empty trajectory
-  if (msg.trajectory.points.empty())
+  if (msg.trajectory.points.empty() or msg.com_trajectory.points.empty())
   {
     ROS_DEBUG("Trajectory message contains empty trajectory. Nothing to convert.");
     out_traj = Trajectory();
@@ -288,7 +288,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   }
 
   // Non strictly-monotonic waypoints
-  if (!isTimeStrictlyIncreasing(msg.trajectory))
+  if (!isTimeStrictlyIncreasing(msg.trajectory) or !isTimeStrictlyIncreasing(msg.com_trajectory))
   {
     ROS_ERROR("Trajectory message contains waypoints that are not strictly increasing in time.");
     out_traj = Trajectory();
@@ -418,7 +418,7 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator com_msg_it =
     findPoint(msg.com_trajectory, time);
   if (com_msg_it == msg.com_trajectory.points.end()) {
-    com_msg_it = msg.trajectory.points.begin();   // Entire trajectory is after current time
+    com_msg_it = msg.com_trajectory.points.begin();   // Entire trajectory is after current time
   } else {
     ++com_msg_it;
     if (com_msg_it == msg.com_trajectory.points.end()) {
