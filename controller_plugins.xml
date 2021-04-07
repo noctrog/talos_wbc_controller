@@ -1,9 +1,4 @@
 <library path="lib/libtalos_wbc_lib">
-  <class name="whole_body_controller_ns/WholeBodyController"
-	 type="whole_body_controller_ns::WholeBodyController"
-	 base_class_type="controller_interface::ControllerBase">
-    <description>Whole body controller for the Talos robot.</description>
-  </class>
   <class name="whole_body_controllers/JointTrajectoryWholeBodyController"
 	 type="whole_body_controllers::JointTrajectoryWholeBodyController"
 	 base_class_type="controller_interface::ControllerBase">

@@ -144,7 +144,6 @@ add_library(qp_formulation
 target_link_libraries(qp_formulation OsqpEigen::OsqpEigen ${pinocchio_LIBRARIES})
 
 add_library(talos_wbc_lib
-  src/whole_body_controller.cc
   src/talos_wbc_joint_trajectory_controller.cc)
 add_dependencies(talos_wbc_lib qp_formulation ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(talos_wbc_lib

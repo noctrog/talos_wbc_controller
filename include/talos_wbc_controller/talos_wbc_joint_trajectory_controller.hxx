@@ -501,6 +501,7 @@ update(const ros::Time& time, const ros::Duration& period)
     successful_joint_traj_.reset();
   }
 
+  ROS_INFO("HE LLEGADO AQUI");
 
   // Solve QP problem
   // Set the robot state
