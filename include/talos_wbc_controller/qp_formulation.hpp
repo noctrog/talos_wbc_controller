@@ -256,7 +256,7 @@ private:
   // Joint states
   Eigen::VectorXd q_, qd_;
   // Desired CoM pos and vel
-  Eigen::VectorXd des_com_pos_, des_com_vel_;
+  Eigen::Vector3d des_com_pos_, des_com_vel_;
 
   // Joint actuator limits
   Eigen::VectorXd u_max_;

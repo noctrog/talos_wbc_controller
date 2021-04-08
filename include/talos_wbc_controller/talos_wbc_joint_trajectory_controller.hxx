@@ -467,7 +467,6 @@ update(const ros::Time& time, const ros::Duration& period)
 
   // Update current CoM state and state error
   typename Segment::State com_state[3];
-  // for (unsigned int i = joints_.size(); i < current_state_.positions.size(); ++i) {
   for (unsigned int i = 0; i < 3; ++i) { // CoM x, y, z
     typename TrajectoryPerJoint::const_iterator segment_it
       = sample(curr_com_traj[i], time_data.uptime.toSec(), com_state[i]);
@@ -501,13 +500,12 @@ update(const ros::Time& time, const ros::Duration& period)
     successful_joint_traj_.reset();
   }
 
-  ROS_INFO("HE LLEGADO AQUI");
-
   // Solve QP problem
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
                          curr_contact_frame_names);
+
   // Set the solver constraints
   solver_->ClearConstraints();
   if (SolverConstraints_.b_equation_of_motion_constraint)
@@ -589,7 +587,7 @@ updateTrajectoryCommand(const JointContactTrajectoryConstPtr& msg, RealtimeGoalH
   ros::Time next_update_uptime = time_data->uptime + time_data->period;
 
   // Hold current position if trajectory is empty
-  if (msg->trajectory.points.empty())
+  if (msg->trajectory.points.empty() or msg->com_trajectory.points.empty())
   {
     setHoldPosition(time_data->uptime, gh);
     ROS_DEBUG_NAMED(name_, "Empty trajectory command, stopping.");

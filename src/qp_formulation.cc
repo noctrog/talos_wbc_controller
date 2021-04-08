@@ -24,7 +24,9 @@ namespace talos_wbc_controller {
 
 QpFormulation::QpFormulation()
   : task_weight_{0.5, 0.5}, Kp_(10000.0), Kv_(0.05), mu_(0.4),
-      bWarmStart_(false), active_constraints_{}, last_num_constraints_(0) {
+    bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
+    des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0}
+{
   // Create model and data objects
   model_ = std::make_shared<Model>();
 
@@ -121,8 +123,8 @@ QpFormulation::QpFormulation()
   void
   QpFormulation::SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel)
   {
-    des_com_pos_ = Eigen::VectorXd::Map(com_pos.data(), com_pos.size());
-    des_com_vel_ = Eigen::VectorXd::Map(com_vel.data(), com_vel.size());
+    des_com_pos_ = Eigen::Vector3d::Map(com_pos.data(), com_pos.size());
+    des_com_vel_ = Eigen::Vector3d::Map(com_vel.data(), com_vel.size());
   }
 
   void
@@ -216,11 +218,11 @@ QpFormulation::QpFormulation()
 
     // Center of mass task
     Eigen::VectorXd q_com(cols);
-    const auto& dJqd = data_->acom[0];
-    const auto& ep_m = des_com_pos_ - data_->com[0];
-    const auto& ev_m = des_com_vel_ - data_->vcom[0];
-    q_com << (dJqd + Kp_ * ep_m + Kv_ * ev_m).transpose() * data_->Jcom,
-      Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
+    const Eigen::Vector3d& dJqd = data_->acom[0];
+    const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
+    const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
+    const Eigen::VectorXd q_aux = (dJqd + Kp_ * ep_m + Kv_ * ev_m).transpose() * data_->Jcom;
+    q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 
     // Join all tasks
     g_ = q_joint * task_weight_.joint + q_com * task_weight_.com;
