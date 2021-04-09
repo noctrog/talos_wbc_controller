@@ -260,6 +260,8 @@ private:
 
   // Dynamic reconfigure, used to tune the solver's Kp and Kv constants
   std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddr_;
+  void paramJointTaskWeight(double w);
+  void paramComTaskWeight(double w);
   void paramKpCB(double new_kp);
   void paramKvCB(double new_kv);
   // Active constraints
@@ -269,6 +271,11 @@ private:
     bool b_actuation_limits_constraint;
     bool b_contact_stability_constraint;
   } SolverConstraints_;
+  // Task weights
+  struct {
+    double joint_task_weight;
+    double com_task_weight;
+  } SolverWeights_;
   // Setters
   void paramEquationOfMotion(bool activate);
   void paramFixedContactCondition(bool activate);

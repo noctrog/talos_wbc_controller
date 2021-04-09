@@ -170,6 +170,18 @@ QpFormulation::QpFormulation()
   }
 
   void
+  QpFormulation::SetJointTaskWeight(double w)
+  {
+    task_weight_.joint = w;
+  }
+
+  void
+  QpFormulation::SetComTaskWeight(double w)
+  {
+    task_weight_.com = w;
+  }
+
+  void
   QpFormulation::UpdateHessianMatrix(void)
   {
     // Joint task cost

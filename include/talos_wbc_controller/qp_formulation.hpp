@@ -112,6 +112,16 @@ public:
   void BuildProblem(void);
 
   /**
+   * @brief Sets the joint task weight.
+   */
+  void SetJointTaskWeight(double w);
+
+  /**
+   * @brief Sets the center of mass task weight.
+   */
+  void SetComTaskWeight(double w);
+
+  /**
    * @brief Solves the QP problem. 
    *
    * You need to call @ref BuildProblem before.

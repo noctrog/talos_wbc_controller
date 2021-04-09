@@ -291,6 +291,14 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 				boost::bind(&JointTrajectoryWholeBodyController::paramKvCB, this, _1),
 				"Velocity constant for the QP problem",
 				0.0, 500);
+  ddr_->registerVariable<double>("joint_task_weight", 0.5,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramJointTaskWeight, this, _1),
+				 "Joint task weight",
+				 0.0, 1.0);
+  ddr_->registerVariable<double>("com_task_weight", 0.5,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramComTaskWeight, this, _1),
+				 "Center of mass task weight",
+				 0.0, 1.0);
   // Controller constraints
   ddr_->registerVariable<bool>("equation_of_motion", true,
 			       boost::bind(&JointTrajectoryWholeBodyController::paramEquationOfMotion, this, _1),
@@ -311,6 +319,9 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   SolverConstraints_.b_fixed_contact_condition_constraint = true;
   SolverConstraints_.b_actuation_limits_constraint = true;
   SolverConstraints_.b_contact_stability_constraint = true;
+
+  SolverWeights_.joint_task_weight = 0.5;
+  SolverWeights_.com_task_weight = 0.5;
 
   return true;
 }
@@ -501,11 +512,13 @@ update(const ros::Time& time, const ros::Duration& period)
   }
 
   // Solve QP problem
+  // Set the solver parameters
+  solver_->SetJointTaskWeight(SolverWeights_.joint_task_weight);
+  solver_->SetComTaskWeight(SolverWeights_.com_task_weight);
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
                          curr_contact_frame_names);
-
   // Set the solver constraints
   solver_->ClearConstraints();
   if (SolverConstraints_.b_equation_of_motion_constraint)
@@ -953,6 +966,21 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::paramContactStability(bool activate)
 {
   SolverConstraints_.b_contact_stability_constraint = activate;
+}
+
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramJointTaskWeight(double w)
+{
+  SolverWeights_.joint_task_weight = w;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramComTaskWeight(double w)
+{
+  SolverWeights_.com_task_weight = w;
 }
 
 } // namespace
