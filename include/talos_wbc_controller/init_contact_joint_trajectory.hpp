@@ -559,22 +559,10 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
     while (std::distance(msg_contacts_it, msg.contacts.end()) > 1) {
       bool bContact = msg_contacts_it->contacts[msg_link_it];
       ros::Duration t_time = msg_contacts_it->time_from_start;
-      result_contact_traj.at(msg_link_it).emplace_back(ContactSegment(bContact, t_time.toSec()));
+      result_contact_traj.at(msg_link_it).emplace_back(bContact, o_msg_start_time.toSec() + t_time.toSec());
       msg_contacts_it++;
     }
   }
-
-  // Show contact trajectory for debug purposes
-  std::stringstream contact_debug_ss;
-  contact_debug_ss << "RECEIVED CONTACTS:" << std::endl;
-  for (size_t i = 0; i < msg.contact_link_names.size(); ++i) {
-    contact_debug_ss << msg.contact_link_names[i] << ": ";
-    for (const auto& segment : result_contact_traj.at(i)) {
-      contact_debug_ss << segment.getContact() << " ";
-    }
-    contact_debug_ss << std::endl;
-  }
-  ROS_DEBUG_STREAM(contact_debug_ss.str());
 
   // Iterate through the joints that are in the message, in the order of the
   // mapping vector for (unsigned int joint_id=0; joint_id <
@@ -706,12 +694,6 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
   typename Trajectory::const_iterator trajIter =
     std::find_if(result_traj.begin(), result_traj.end(), contact::isNotEmpty<Trajectory>);
 
-  if (trajIter == result_traj.end())
-  {
-    result_traj.clear();
-    result_com_traj.clear();
-    result_contact_traj.clear();
-  }
 
   // Iterate through the CoM coordinates
   for (unsigned int msg_com_id = 0; msg_com_id < 3; msg_com_id++)
@@ -827,6 +809,13 @@ initContactJointTrajectory(const talos_wbc_controller::JointContactTrajectory& m
 
     if (result_traj_per_axis.size() > 0)
       result_com_traj[msg_com_id] = result_traj_per_axis;
+  }
+
+  if (trajIter == result_traj.end())
+  {
+    result_traj.clear();
+    result_com_traj.clear();
+    result_contact_traj.clear();
   }
 
   out_traj = result_traj;

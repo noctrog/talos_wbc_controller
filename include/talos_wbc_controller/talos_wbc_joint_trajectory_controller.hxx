@@ -13,8 +13,8 @@ getContactsAtInstant(const ContactPerLink& curr_traj,
   typedef typename ContactPerLink::const_iterator SegmentIterator;
   typedef typename std::iterator_traits<SegmentIterator>::value_type Segment;
 
-  SegmentIterator first = curr_traj.begin();
-  SegmentIterator last = curr_traj.end();
+  const SegmentIterator first = curr_traj.begin();
+  const SegmentIterator last = curr_traj.end();
 
   auto isBeforeSegment = [](const Time& time, const Segment& segment){return time < segment.getTime();};
 
@@ -25,7 +25,6 @@ getContactsAtInstant(const ContactPerLink& curr_traj,
 	  : --std::upper_bound(first, last, time, isBeforeSegment);
 
   // Get the corresponding position of the contact sequence
-  size_t contact_id = 0;
   if (it != last) {
     // Segment found at specified time
     return it->getContact();
@@ -359,9 +358,6 @@ update(const ros::Time& time, const ros::Duration& period)
   // fetch the currently followed trajectory, it has been updated by the non-rt thread with something that starts in the
   // next control cycle, leaving the current cycle without a valid trajectory.
 
-  // Debug
-  // ROS_INFO("update(): se tienen %d contactos. Sin embargo se tienen %d links",
-	   // curr_contact_traj.size(), contact_link_names_.size());
   // Sample current contacts if there is any contact trajectory
   std::vector<ContactSegment> curr_contacts(contact_link_names_.size());
   std::vector<std::string> curr_contact_frame_names;
