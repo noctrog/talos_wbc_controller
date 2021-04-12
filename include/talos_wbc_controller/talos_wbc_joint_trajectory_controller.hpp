@@ -52,6 +52,7 @@
 #include <talos_wbc_controller/JointContactTrajectory.h>
 #include <talos_wbc_controller/hardware_interface_direct_effort.hpp>
 #include <talos_wbc_controller/FollowContactJointTrajectoryAction.h>
+#include <talos_wbc_controller/JointContactTrajectoryControllerState.h>
 
 #include <nav_msgs/Odometry.h>
 
@@ -147,7 +148,7 @@ private:
   typedef realtime_tools::RealtimeServerGoalHandle<talos_wbc_controller::FollowContactJointTrajectoryAction> RealtimeGoalHandle;
   typedef boost::shared_ptr<RealtimeGoalHandle>                                               RealtimeGoalHandlePtr;
   typedef talos_wbc_controller::JointContactTrajectory::ConstPtr                              JointTrajectoryConstPtr;
-  typedef realtime_tools::RealtimePublisher<control_msgs::JointTrajectoryControllerState>     StatePublisher;
+  typedef realtime_tools::RealtimePublisher<talos_wbc_controller::JointContactTrajectoryControllerState>             StatePublisher;
   typedef boost::scoped_ptr<StatePublisher>                                                   StatePublisherPtr;
 
   // Data types related to the continuous trajectory
@@ -201,6 +202,9 @@ private:
   typename Segment::State state_error_;           ///< Preallocated workspace variable.
   typename Segment::State desired_joint_state_;   ///< Preallocated workspace variable.
   typename Segment::State state_joint_error_;     ///< Preallocated workspace variable.
+  typename Segment::State current_com_state_;
+  typename Segment::State desired_com_state_;
+  typename Segment::State error_com_state_;
 
   realtime_tools::RealtimeBuffer<TimeData> time_data_;
 
@@ -282,7 +286,6 @@ private:
   void paramActuationLimits(bool activate);
   void paramContactStability(bool activate);
   
-
   ros::Subscriber robot_base_link_state_; // Retrieve the position and velocity of the robot's base_link
   void baseLinkCB(const nav_msgs::OdometryConstPtr& msg);
   nav_msgs::Odometry last_base_link_state_;

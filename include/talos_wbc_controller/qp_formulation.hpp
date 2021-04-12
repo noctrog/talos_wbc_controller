@@ -159,6 +159,16 @@ public:
    */
   int GetNumConstraints(void) const;
 
+  /**
+   * @brief Returns the center of mass. @ref SetRobotState needs to be called first.
+   */
+  Eigen::Vector3d GetCenterOfMass(void) const;
+
+  /**
+   * @brief Returns the center of mass velocity. @ref SetRobotState needs to be called first.
+   */
+  Eigen::Vector3d GetCenterOfMassVelocity(void) const;
+
 private:
 
   // Dynamics algorithms

@@ -1,0 +1,9 @@
+Header header
+string[] joint_names
+trajectory_msgs/JointTrajectoryPoint desired
+trajectory_msgs/JointTrajectoryPoint actual
+trajectory_msgs/JointTrajectoryPoint error  # Redundant, but useful
+trajectory_msgs/JointTrajectoryPoint com_desired
+trajectory_msgs/JointTrajectoryPoint com_actual
+trajectory_msgs/JointTrajectoryPoint com_error
+# talos_wbc_controller/JointContactTrajectoryContacts contacts

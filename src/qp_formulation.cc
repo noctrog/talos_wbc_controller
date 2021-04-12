@@ -555,4 +555,17 @@ QpFormulation::QpFormulation()
     return dJcom;
   }
 
+
+  Eigen::Vector3d
+  QpFormulation::GetCenterOfMass(void) const
+  {
+    return data_->com[0];
+  }
+
+  Eigen::Vector3d
+  QpFormulation::GetCenterOfMassVelocity(void) const
+  {
+    return data_->vcom[0];
+  }
+
 } // namespace talos_wbc_controller

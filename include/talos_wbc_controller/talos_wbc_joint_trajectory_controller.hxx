@@ -224,6 +224,9 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   state_error_         = typename Segment::State(n_joints);
   desired_joint_state_ = typename Segment::State(1);
   state_joint_error_   = typename Segment::State(1);
+  current_com_state_   = typename Segment::State(3);
+  desired_com_state_   = typename Segment::State(3);
+  error_com_state_     = typename Segment::State(3);
 
   successful_joint_traj_ = boost::dynamic_bitset<>(joints_.size());
 
@@ -271,6 +274,12 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
     state_publisher_->msg_.actual.velocities.resize(n_joints);
     state_publisher_->msg_.error.positions.resize(n_joints);
     state_publisher_->msg_.error.velocities.resize(n_joints);
+    state_publisher_->msg_.com_desired.positions.resize(3);
+    state_publisher_->msg_.com_desired.velocities.resize(3);
+    state_publisher_->msg_.com_actual.positions.resize(3);
+    state_publisher_->msg_.com_actual.velocities.resize(3);
+    state_publisher_->msg_.com_error.positions.resize(3);
+    state_publisher_->msg_.com_error.velocities.resize(3);
     state_publisher_->unlock();
   }
 
@@ -477,6 +486,7 @@ update(const ros::Time& time, const ros::Duration& period)
   for (unsigned int i = 0; i < 3; ++i) { // CoM x, y, z
     typename TrajectoryPerJoint::const_iterator segment_it
       = sample(curr_com_traj[i], time_data.uptime.toSec(), com_state[i]);
+
     if (curr_com_traj[i].end() == segment_it)
     {
       // Non-realtime safe, but should never happen under normal operation
@@ -545,6 +555,18 @@ update(const ros::Time& time, const ros::Duration& period)
   hw_iface_adapter_.updateCommand(time_data.uptime, time_data.period,
                                   desired_state_, state_error_);
 
+  // Save CoM state info
+  Eigen::Vector3d com_position = solver_->GetCenterOfMass();
+  Eigen::Vector3d com_velocity = solver_->GetCenterOfMassVelocity();
+  for (size_t i = 0; i < 3; ++i) {
+    current_com_state_.position[i] = com_position(i);
+    current_com_state_.velocity[i] = com_velocity(i);
+    desired_com_state_.position[i] = com_state[i].position[0];
+    desired_com_state_.velocity[i] = com_state[i].velocity[0];
+    error_com_state_.position[i] = desired_com_state_.position[i] - current_com_state_.position[i];
+    error_com_state_.velocity[i] = desired_com_state_.position[i] - current_com_state_.position[i];
+  }
+
   // Set action feedback
   if (rt_active_goal_ && rt_active_goal_->preallocated_feedback_)
   {
@@ -556,6 +578,12 @@ update(const ros::Time& time, const ros::Duration& period)
     rt_active_goal_->preallocated_feedback_->actual.velocities     = current_state_.velocity;
     rt_active_goal_->preallocated_feedback_->error.positions       = state_error_.position;
     rt_active_goal_->preallocated_feedback_->error.velocities      = state_error_.velocity;
+    rt_active_goal_->preallocated_feedback_->com_desired.positions = desired_com_state_.position;
+    rt_active_goal_->preallocated_feedback_->com_desired.velocities= desired_com_state_.velocity;
+    rt_active_goal_->preallocated_feedback_->com_actual.positions  = current_com_state_.position;
+    rt_active_goal_->preallocated_feedback_->com_actual.velocities = current_com_state_.position;
+    rt_active_goal_->preallocated_feedback_->com_error.positions   = error_com_state_.position;
+    rt_active_goal_->preallocated_feedback_->com_actual.velocities = error_com_state_.position;
     rt_active_goal_->setFeedback( rt_active_goal_->preallocated_feedback_ );
   }
 
@@ -833,7 +861,12 @@ publishState(const ros::Time& time)
       state_publisher_->msg_.actual.velocities     = current_state_.velocity;
       state_publisher_->msg_.error.positions       = state_error_.position;
       state_publisher_->msg_.error.velocities      = state_error_.velocity;
-
+      state_publisher_->msg_.com_desired.positions = desired_com_state_.position;
+      state_publisher_->msg_.com_desired.velocities= desired_com_state_.velocity;
+      state_publisher_->msg_.com_actual.positions  = current_com_state_.position;
+      state_publisher_->msg_.com_actual.velocities = current_com_state_.velocity;
+      state_publisher_->msg_.com_error.positions   = error_com_state_.position;
+      state_publisher_->msg_.com_error.velocities  = error_com_state_.velocity;
       state_publisher_->unlockAndPublish();
     }
   }

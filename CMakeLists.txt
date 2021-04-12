@@ -65,6 +65,7 @@ add_message_files(
   FILES
   JointContactTrajectory.msg
   JointContactTrajectoryContacts.msg
+  JointContactTrajectoryControllerState.msg
 )
 
 ## Generate services in the 'srv' folder
