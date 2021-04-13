@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>osqp</name>
+  <version>1.0.0</version>
+  <description>
+	  Quadratic Programming solver.
+  </description>
+
+  <author>Oxford Control</author>
+  <maintainer email="mail@todo.org">Oxford Control</maintainer>
+  <license>BSD</license>
+  
+  <!-- The following tags are recommended by REP-136 -->
+  <exec_depend>catkin</exec_depend>
+  <buildtool_depend>cmake</buildtool_depend>
+  <export>
+    <build_type>cmake</build_type>
+    <rosdoc config="${prefix}/doc/rosdoc.yaml"/>
+  </export>
+  
+</package>
