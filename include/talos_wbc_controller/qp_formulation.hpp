@@ -39,13 +39,26 @@ public:
   typedef std::vector<double> VelErrors;
   typedef std::vector<double> AccVector;
   // Contact names and jacobians
-  typedef std::vector<std::string> ContactNames;
   typedef std::vector<Eigen::MatrixXd, Eigen::aligned_allocator<Eigen::MatrixXd>> ContactJacobians;
   // Robot representation
   typedef pinocchio::Model Model;
   typedef pinocchio::Data Data;
   typedef std::shared_ptr<Model> ModelPtr;
   typedef std::shared_ptr<Data> DataPtr;
+  // Contacts
+  typedef std::string ContactName;
+  typedef std::vector<ContactName> ContactNameList;
+  struct ContactFamily {
+    ContactName family_name;
+    ContactNameList contact_names;
+
+    ContactFamily(const ContactName& fname,
+		  const ContactNameList& cn) {
+      family_name = fname;
+      contact_names = cn;
+    }
+  };
+  typedef std::vector<ContactFamily> ContactFamilyList;
 
   QpFormulation();
   virtual ~QpFormulation() = default;
@@ -57,7 +70,33 @@ public:
    */
   void SetRobotState(const SpatialPos&, const SpatialVel&,
 		     const JointPos&, const JointVel&,
-		     const ContactNames);
+		     const ContactNameList);
+
+  /**
+   * @brief Defines a contact family. The newly contact family
+   * persists.
+   *
+   * @param family_name: Name that will be used to activate the
+   * contact family.
+   *
+   * @param contact_link_names: The names of the links to include in
+   * the contact. This names must be defined in the previously loaded
+   * URDF model of the robot.
+   *
+   * Set a contact family. With a contact family, the corresponding
+   * set of contacts will become active automatically when the contact
+   * family is activated. This is useful to model contacts that are
+   * surfaces, e.g feet, as feet can be modelled by its
+   * vertices. (This can lead to some physical inconsistencies but we
+   * assume they are not relevant).
+   */
+  void SetContactFamily(const ContactName& family_name,
+			const ContactNameList& contact_link_names);
+
+  /**
+   * @brief Deletes all contact families.
+   */
+  void ClearContactFamily(void);
 
   // Joint state task
   /** 
@@ -103,15 +142,6 @@ public:
   double GetKV(void);
 
   /**
-   * @brief Builds all the matrices for the QP program.
-   * 
-   * You need to call @ref SetRobotState, @ref SetPositionErrors,
-   * @ref SetVelocityErrors and @ref SetReferenceAccelerations first.
-   *
-   */
-  void BuildProblem(void);
-
-  /**
    * @brief Sets the joint task weight.
    */
   void SetJointTaskWeight(double w);
@@ -120,6 +150,15 @@ public:
    * @brief Sets the center of mass task weight.
    */
   void SetComTaskWeight(double w);
+
+  /**
+   * @brief Builds all the matrices for the QP program.
+   * 
+   * You need to call @ref SetRobotState, @ref SetPositionErrors,
+   * @ref SetVelocityErrors and @ref SetReferenceAccelerations first.
+   *
+   */
+  void BuildProblem(void);
 
   /**
    * @brief Solves the QP problem. 
@@ -262,7 +301,7 @@ private:
 
   // The current contact jacobians
   ContactJacobians contact_jacobians_;
-  ContactNames contact_names_;
+  ContactNameList contact_names_;
   std::vector<int> contact_frames_ids_;
   double mu_; /// Friction coeficient
 
@@ -286,6 +325,9 @@ private:
 
   // Saves the number of constraints in the most recent solved problem
   int last_num_constraints_;
+
+  // Contact families
+  ContactFamilyList contact_families_;
 };
 
 } // namespace talos_wbc_controller

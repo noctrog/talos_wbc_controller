@@ -25,7 +25,8 @@ namespace talos_wbc_controller {
 QpFormulation::QpFormulation()
   : task_weight_{0.5, 0.5}, Kp_(10000.0), Kv_(0.05), mu_(0.4),
     bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
-    des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0}
+    des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},
+    contact_families_{}
 {
   // Create model and data objects
   model_ = std::make_shared<Model>();
@@ -37,7 +38,7 @@ QpFormulation::QpFormulation()
     std::runtime_error("Could not find the urdf model! Check if it is located "
                        "in the urdf folder!");
   }
-  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2.urdf";
+  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
   std::cout << urdf_path << std::endl;
   // JointModelFreeFlyer indicates that the root of the robot is not fixed to
   // the world
@@ -68,7 +69,7 @@ QpFormulation::QpFormulation()
   void
   QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
 			       const JointPos& q, const JointVel& qd,
-			       const ContactNames contact_names)
+			       const ContactNameList contact_names)
   {
     if (base_pos.size() != 7 or base_vel.size() != 6) {
       ROS_ERROR("SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively");
@@ -88,10 +89,21 @@ QpFormulation::QpFormulation()
 
     // Retrieve contact frame ids
     contact_frames_ids_.clear();
-    for (const auto& name : contact_names_) {
-      int id = model_->getFrameId(name);
-      if (id < model_->frames.size())
-	contact_frames_ids_.push_back(id);
+    for (const ContactName& name : contact_names_) {
+      // If contact is the name of a family, include all of its contacts
+      const auto cf = std::find_if(std::begin(contact_families_), std::end(contact_families_),
+				   [name](const ContactFamily& cf){return cf.family_name.compare(name) == 0;});
+      if (cf != std::end(contact_families_)) {
+	for (const ContactName& contact_name : cf->contact_names) {
+	  // There is no need to check because every contact in the family is checked in advance
+	  contact_frames_ids_.push_back(model_->getFrameId(contact_name));
+	}
+      } else {
+	// Add a normal contact
+	const int id = model_->getFrameId(name);
+	if (id < model_->frames.size())
+	  contact_frames_ids_.push_back(id);
+      }
     }
 
     // Computes the joint space inertia matrix (M)
@@ -118,6 +130,28 @@ QpFormulation::QpFormulation()
     pinocchio::centerOfMass(*model_, *data_, q_, qd_, 0*qd_);
     // Compute the CoM jacobian
     pinocchio::jacobianCenterOfMass(*model_, *data_, q_);
+  }
+
+  void
+  QpFormulation::SetContactFamily(const ContactName& family_name,
+				  const ContactNameList& contact_link_names)
+  {
+    // Check if every link name exists in the current model
+    for (const auto& link_name : contact_link_names) {
+      const int id = model_->getFrameId(link_name);
+      // If frame does not exist, do not add the contact family
+      if (id >= model_->frames.size()) {
+	std::runtime_error("Frame link: " + link_name + " does not exist in the model!");
+      }
+    }
+
+    contact_families_.emplace_back(family_name, contact_link_names);
+  }
+
+  void
+  QpFormulation::ClearContactFamily(void)
+  {
+    contact_families_.clear();
   }
 
   void

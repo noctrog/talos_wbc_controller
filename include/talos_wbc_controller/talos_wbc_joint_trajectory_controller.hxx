@@ -52,6 +52,14 @@ starting(const ros::Time& time)
 
   // Hardware interface adapter
   hw_iface_adapter_.starting(time_data.uptime);
+
+  // Add the surface contact
+  solver_->SetContactFamily("left_sole_link",
+			    {"left_sole_front_left_link", "left_sole_front_right_link",
+			     "left_sole_back_left_link", "left_sole_back_right_link"});
+  solver_->SetContactFamily("right_sole_link",
+			    {"right_sole_front_left_link", "right_sole_front_right_link",
+			     "right_sole_back_left_link", "right_sole_back_right_link"});
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
@@ -59,6 +67,9 @@ inline void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, H
 stopping(const ros::Time& /*time*/)
 {
   preemptActiveGoal();
+
+  // Remove the feet contact surface
+  solver_->ClearContactFamily();
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
