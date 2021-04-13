@@ -267,8 +267,10 @@ private:
   std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddr_;
   void paramJointTaskWeight(double w);
   void paramComTaskWeight(double w);
-  void paramKpCB(double new_kp);
-  void paramKvCB(double new_kv);
+  void paramJointKpCB(double new_kp);
+  void paramJointKvCB(double new_kv);
+  void paramComKpCB(double new_kp);
+  void paramComKvCB(double new_kv);
   // Active constraints
   struct {
     bool b_equation_of_motion_constraint;
@@ -281,6 +283,12 @@ private:
     double joint_task_weight;
     double com_task_weight;
   } SolverWeights_;
+  // Task dynamics
+  struct TaskDynamics {
+    double Kp, Kv;
+  };
+  TaskDynamics JointTaskDynamics_;
+  TaskDynamics ComTaskDynamics_;
   // Setters
   void paramEquationOfMotion(bool activate);
   void paramFixedContactCondition(bool activate);

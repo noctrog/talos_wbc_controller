@@ -301,12 +301,20 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
   // Controller parameters
-  ddr_->registerVariable<double>("Kp", 10000.0,
-				boost::bind(&JointTrajectoryWholeBodyController::paramKpCB, this, _1),
+  ddr_->registerVariable<double>("Joint_Kp", 10000.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
 				"Position constant for the QP problem",
 				0.0, 2e4);
-  ddr_->registerVariable<double>("Kv", 0.0,
-				boost::bind(&JointTrajectoryWholeBodyController::paramKvCB, this, _1),
+  ddr_->registerVariable<double>("Joint_Kv", 200.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramJointKvCB, this, _1),
+				"Velocity constant for the QP problem",
+				0.0, 500);
+  ddr_->registerVariable<double>("CoM_Kp", 10000.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramComKpCB, this, _1),
+				"Position constant for the QP problem",
+				0.0, 2e4);
+  ddr_->registerVariable<double>("CoM_Kv", 200.0,
+				boost::bind(&JointTrajectoryWholeBodyController::paramComKvCB, this, _1),
 				"Velocity constant for the QP problem",
 				0.0, 500);
   ddr_->registerVariable<double>("joint_task_weight", 0.5,
@@ -340,6 +348,11 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
   SolverWeights_.joint_task_weight = 0.5;
   SolverWeights_.com_task_weight = 0.5;
+
+  JointTaskDynamics_.Kp = 10000.0;
+  JointTaskDynamics_.Kv = 200.0;
+  ComTaskDynamics_.Kp = 10000.0;
+  ComTaskDynamics_.Kv = 200.0;
 
   // Initialize the solver
   ROS_INFO("Loading URDF model...");
@@ -976,16 +989,34 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
-::paramKpCB(double new_kp)
+::paramJointKpCB(double new_kp)
 {
-  solver_->SetKP(new_kp);
+  JointTaskDynamics_.Kp = new_kp;
+  solver_->SetJointTaskDynamics(JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
-::paramKvCB(double new_kv)
+::paramJointKvCB(double new_kv)
 {
-  solver_->SetKV(new_kv);
+  JointTaskDynamics_.Kv = new_kv;
+  solver_->SetJointTaskDynamics(JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramComKpCB(double new_kp)
+{
+  ComTaskDynamics_.Kp = new_kp;
+  solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramComKvCB(double new_kv)
+{
+  ComTaskDynamics_.Kv = new_kv;
+  solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>

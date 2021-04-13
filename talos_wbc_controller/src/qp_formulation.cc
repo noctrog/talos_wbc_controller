@@ -20,10 +20,11 @@
 namespace talos_wbc_controller {
 
   QpFormulation::QpFormulation(const std::string& urdf_path)
-  : task_weight_{0.5, 0.5}, Kp_(10000.0), Kv_(0.05), mu_(0.4),
-    bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
-    des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},
-    contact_families_{}
+    : task_weight_{0.5, 0.5}, joint_task_dynamics_{10000.0, 200.0},
+      com_task_dynamics_{10000.0, 200.0},
+      mu_(0.4), bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
+      des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},
+      contact_families_{}
 {
   // Create model and data objects
   model_ = std::make_shared<Model>();
@@ -168,30 +169,6 @@ namespace talos_wbc_controller {
   }
 
   void
-  QpFormulation::SetKP(double Kp)
-  {
-    Kp_ = Kp;
-  }
-
-  double
-  QpFormulation::GetKP(void)
-  {
-    return Kp_;
-  }
-
-  void
-  QpFormulation::SetKV(double Kv)
-  {
-    Kv_ = Kv;
-  }
-
-  double
-  QpFormulation::GetKV(void)
-  {
-    return Kv_;
-  }
-
-  void
   QpFormulation::SetJointTaskWeight(double w)
   {
     task_weight_.joint = w;
@@ -242,12 +219,15 @@ namespace talos_wbc_controller {
     Eigen::VectorXd ep  = Eigen::VectorXd::Map(ep_.data(), ep_.size());
     Eigen::VectorXd ev  = Eigen::VectorXd::Map(ev_.data(), ev_.size());
     Eigen::VectorXd qrdd = Eigen::VectorXd::Map(qrdd_.data(), qrdd_.size());
+    double Kp, Kv;
 
     // Get matrix dimensions
     const int cols = GetNumVariables();
     // Calculate joint gradient matrix
     Eigen::VectorXd q_joint(cols);
-    q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp_ * ep + Kv_ * ev),
+    Kp = joint_task_dynamics_.Kp;
+    Kv = joint_task_dynamics_.Kv;
+    q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp * ep + Kv * ev),
       Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
 
     // Center of mass task
@@ -255,7 +235,9 @@ namespace talos_wbc_controller {
     const Eigen::Vector3d& dJqd = data_->acom[0];
     const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
     const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
-    const Eigen::VectorXd q_aux = (dJqd + Kp_ * ep_m + Kv_ * ev_m).transpose() * data_->Jcom;
+    Kp = com_task_dynamics_.Kp;
+    Kv = com_task_dynamics_.Kv;
+    const Eigen::VectorXd q_aux = (dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
     q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 
     // Join all tasks
@@ -582,6 +564,20 @@ namespace talos_wbc_controller {
   QpFormulation::GetCenterOfMassVelocity(void) const
   {
     return data_->vcom[0];
+  }
+
+  void
+  QpFormulation::SetJointTaskDynamics(const double kp, const double kv)
+  {
+    joint_task_dynamics_.Kp = kp;
+    joint_task_dynamics_.Kv = kv;
+  }
+
+  void
+  QpFormulation::SetComTaskDynamics(const double kp, const double kv)
+  {
+    com_task_dynamics_.Kp = kp;
+    com_task_dynamics_.Kv = kv;
   }
 
 } // namespace talos_wbc_controller

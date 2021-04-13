@@ -119,27 +119,15 @@ public:
    */
   void SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel);
 
-  /** 
-   * Sets the Kp constant that multiplies the position error. Used to
-   * calculate the desired acceleration.
+  /**
+   * Sets the constants that define the second order linear dynamics of the joint task.
    */
-  void SetKP(double Kp);
+  void SetJointTaskDynamics(const double kp, const double kv);
 
   /**
-   * Returns the current Kp constant.
+   * Sets the constants that define the second order linear dynamics of the com task.
    */
-  double GetKP(void);
-
-  /** 
-   * Sets the Kp constant that multiplies the velocity error. Used to
-   * calculate the desired acceleration.
-   */
-  void SetKV(double Kv);
-
-  /**
-   * Returns the current Kv constant.
-   */
-  double GetKV(void);
+  void SetComTaskDynamics(const double kp, const double kv);
 
   /**
    * @brief Sets the joint task weight.
@@ -297,7 +285,11 @@ private:
   PosErrors ep_;
   VelErrors ev_;
   AccVector qrdd_;
-  double Kp_, Kv_;
+  struct TaskDynamics {
+    double Kp, Kv;
+  };
+  TaskDynamics joint_task_dynamics_;
+  TaskDynamics com_task_dynamics_;
 
   // The current contact jacobians
   ContactJacobians contact_jacobians_;
