@@ -1,0 +1,49 @@
+* Talos Whole Body Controller (WIP)
+
+This is an attempt to create a simple Whole Body Controller from
+scratch. The controller is highly inspired from the works:
+
+- Bouyarmane, K., Caron, St\’ephane, Escande, A., & Kheddar, A., Multi-contact motion planning and control, In A. Goswami, & P. Vadakkepat (Eds.), Humanoid Robotics: A Reference (pp. 1763–1804) (2019). Dordrecht: Springer Netherlands.
+- Salini, J., Barth\’elemy, S\’ebastien, Bidaud, P., & Padois, V., Whole-body motion synthesis with lqp-based controller -- application to icub, In K. Mombaur, & K. Berns (Eds.), Modeling, Simulation and Optimization of Bipedal Walking (pp. 199–210) (2013). Berlin, Heidelberg: Springer Berlin Heidelberg.
+
+This controller makes use of the excellent [[https://github.com/oxfordcontrol/osqp][osqp]] QP solver and the
+[[https://github.com/robotology/osqp-eigen][osqp-eigen]] C++ interface.
+
+* How to use
+
+** Dependencies
+
+- ROS Melodic (tested on Debian 9).
+- PAL Robotics' Talos ROS packages: http://wiki.ros.org/Robots/TALOS/Tutorials/Installation/Simulation
+- Pinocchio (do not install =ros-melodic-pinocchio=): https://stack-of-tasks.github.io/pinocchio/download.html
+
+** How to use
+
+The first step is to launch the Gazebo physics simulator:
+
+#+begin_src bash
+  roslaunch talos_gazebo talos_gazebo.launch
+#+end_src
+
+We can now load our controller:
+
+#+begin_src bash
+  roslaunch talos_wbc_controller talos_trajectory_wbc_controller.launch
+#+end_src
+
+The robot will remain still, waiting for a trajectory to
+follow. You can change the QP formulation at any time using =rqt=:
+
+#+begin_src bash
+  rosrun rqt_reconfigure rqt_reconfigure
+#+end_src
+
+The controller is waiting for trajectories to be sent to the
+=/talos_trajectory_wbc_controller/command= topic. The message type is
+=talos_wbc_controller::JointContactTrajectory=, and can send joint and
+center of mass trajectories, as well as link contacts with the world.
+
+Trajectories can be generated in advance using any planning
+framework. Using my fork of [[https://github.com/noctrog/towr][towr]] and the package [[https://github.com/noctrog/xpp_talos][xpp_talos]], simple
+walking gaits can be generated and sent to this controller (TODO
+explain how).
