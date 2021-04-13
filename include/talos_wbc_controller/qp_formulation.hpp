@@ -60,7 +60,7 @@ public:
   };
   typedef std::vector<ContactFamily> ContactFamilyList;
 
-  QpFormulation();
+  QpFormulation(const std::string& urdf_path);
   virtual ~QpFormulation() = default;
 
   /**

@@ -17,12 +17,9 @@
 #include <pinocchio/algorithm/center-of-mass-derivatives.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
 
-#include <ros/ros.h>
-#include <ros/package.h>
-
 namespace talos_wbc_controller {
 
-QpFormulation::QpFormulation()
+  QpFormulation::QpFormulation(const std::string& urdf_path)
   : task_weight_{0.5, 0.5}, Kp_(10000.0), Kv_(0.05), mu_(0.4),
     bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
     des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},
@@ -32,20 +29,11 @@ QpFormulation::QpFormulation()
   model_ = std::make_shared<Model>();
 
   // Load robot model
-  ROS_INFO("Loading URDF model...");
-  std::string xpp_talos_path = ros::package::getPath("talos_wbc_controller");
-  if (xpp_talos_path.size() == 0) {
-    std::runtime_error("Could not find the urdf model! Check if it is located "
-                       "in the urdf folder!");
-  }
-  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
-  std::cout << urdf_path << std::endl;
   // JointModelFreeFlyer indicates that the root of the robot is not fixed to
   // the world
   pinocchio::urdf::buildModel(urdf_path, pinocchio::JointModelFreeFlyer(),
                               *model_);
-  ROS_INFO("Pinocchio model loaded success, robot name: %s",
-           model_->name.c_str());
+  std::cout << "Pinocchio model loaded success, robot name: " << model_->name.c_str() << '\n';
 
   // Initialize pinocchio model data
   data_ = std::make_shared<pinocchio::Data>(*model_);
@@ -72,11 +60,11 @@ QpFormulation::QpFormulation()
 			       const ContactNameList contact_names)
   {
     if (base_pos.size() != 7 or base_vel.size() != 6) {
-      ROS_ERROR("SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively");
+      std::cerr << "SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively";
       return;
     }
     if (q.size() != (model_->njoints - 2) or qd.size() != (model_->njoints - 2)) {
-      ROS_ERROR("SetRobotState: number of joints does not match with the robot model");
+      std::cerr << "SetRobotState: number of joints does not match with the robot model";
       return;
     }
 
@@ -412,12 +400,6 @@ QpFormulation::QpFormulation()
       bWarmStart_ = false;
       last_num_constraints_ = current_num_constraints;
     }
-
-    // ROS_INFO("P shape: (%ld, %ld)", P_.rows(), P_.cols());
-    // ROS_INFO("g shape: (%ld)", g_.size());
-    // ROS_INFO("A shape: (%ld, %ld)", A_.rows(), A_.cols());
-    // ROS_INFO("l shape: (%ld)", l_.size());
-    // ROS_INFO("u shape: (%ld)", u_.size());
   }
 
   void

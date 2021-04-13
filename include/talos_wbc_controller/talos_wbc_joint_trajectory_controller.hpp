@@ -18,6 +18,7 @@
 
 // ROS
 #include <ros/node_handle.h>
+#include <ros/package.h>
 
 // URDF
 #include <urdf/model.h>

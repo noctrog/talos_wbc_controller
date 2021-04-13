@@ -104,8 +104,7 @@ JointTrajectoryWholeBodyController()
   : verbose_(false), // Set to true during debugging
     hold_trajectory_ptr_(new Trajectory),
     hold_com_trajectory_ptr_(new Trajectory),
-    hold_contact_trajectory_ptr_(new ContactTrajectory),
-    solver_(new Solver)
+    hold_contact_trajectory_ptr_(new ContactTrajectory)
 {
   // The verbose parameter is for advanced use as it breaks real-time safety
   // by enabling ROS logging services
@@ -342,6 +341,15 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   SolverWeights_.joint_task_weight = 0.5;
   SolverWeights_.com_task_weight = 0.5;
 
+  // Initialize the solver
+  ROS_INFO("Loading URDF model...");
+  std::string xpp_talos_path = ros::package::getPath("talos_wbc_controller");
+  if (xpp_talos_path.size() == 0) {
+    std::runtime_error("Could not find the urdf model! Check if it is located "
+                       "in the urdf folder!");
+  }
+  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
+  solver_.reset(new Solver(urdf_path));
   return true;
 }
 
