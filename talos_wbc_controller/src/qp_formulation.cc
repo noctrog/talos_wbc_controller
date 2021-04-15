@@ -199,7 +199,7 @@ namespace talos_wbc_controller {
 
     // Center of mass task
     Eigen::SparseMatrix<double> P_com_task(cols, cols);
-    auto insert_in_sparse = [](Eigen::SparseMatrix<double> S, const Eigen::MatrixXd &m, int i, int j) {
+    auto insert_in_sparse = [](Eigen::SparseMatrix<double>& S, const Eigen::MatrixXd &m, int i, int j) {
       for (size_t x = 0; x < m.rows(); ++x)
 	for (size_t y = 0; y < m.cols(); ++y)
 	  S.insert(i + x, j + y) = m(x, y);
