@@ -237,7 +237,7 @@ namespace talos_wbc_controller {
     const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
     Kp = com_task_dynamics_.Kp;
     Kv = com_task_dynamics_.Kv;
-    const Eigen::VectorXd q_aux = (dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
+    const Eigen::VectorXd q_aux = -(dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
     q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 
     // Join all tasks
