@@ -926,26 +926,24 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
 
   // Create segment that goes from current (pos,vel) to (pos,-vel)
   const unsigned int n_joints = joints_.size();
-  for (unsigned int i = 0; i < n_joints; ++i)
-  {
-    hold_start_state_.position[0]     =  joints_[i].getPosition();
-    hold_start_state_.velocity[0]     =  joints_[i].getVelocity();
-    hold_start_state_.acceleration[0] =  0.0;
 
-    hold_end_state_.position[0]       =  joints_[i].getPosition();
-    hold_end_state_.velocity[0]       = -joints_[i].getVelocity();
-    hold_end_state_.acceleration[0]   =  0.0;
+  // Create a segment that contains the default robot position
+  const std::vector<double> q_hold {0.0, 0.028730477193730477, -0.7060605463076763, 1.4774145045100333,
+    -0.771353958202357, -0.028730477193733783, 0.0, -0.028730477193724013, -0.7060605463076761,
+    1.4774145045100333, -0.7713539582023572, 0.028730477193724013};
+  for (unsigned int i = 0; i < n_joints; ++i) {
+    hold_start_state_.position[0] = joints_[i].getPosition();
+    hold_start_state_.velocity[0] = joints_[i].getVelocity();
+    // hold_start_state_.position[0] = q_hold[i];
+    // hold_start_state_.velocity[0] = 0.0;
+    hold_start_state_.acceleration[0] = 0.0;
+
+    hold_end_state_.position[0] = q_hold[i];
+    hold_end_state_.velocity[0] = 0.0;
+    hold_end_state_.acceleration[0] = 0.0;
 
     (*hold_trajectory_ptr_)[i].front().init(start_time,  hold_start_state_,
-                                                             end_time_2x, hold_end_state_);
-
-    // Sample segment at its midpoint, that should have zero velocity
-    (*hold_trajectory_ptr_)[i].front().sample(end_time, hold_end_state_);
-
-    // Now create segment that goes from current state to one with zero end velocity
-    (*hold_trajectory_ptr_)[i].front().init(start_time, hold_start_state_,
-                                                             end_time,   hold_end_state_);
-
+					    start_time + 2.0, hold_end_state_);
     // Set goal handle for the segment
     (*hold_trajectory_ptr_)[i].front().setGoalHandle(gh);
   }
@@ -961,16 +959,16 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
       hold_end_state_.velocity[0] = 0.0;
       hold_end_state_.acceleration[0] = 0.0;
     } else {
-      hold_start_state_.position[0] = 1.0;
+      hold_start_state_.position[0] = 0.95;
       hold_start_state_.velocity[0] = 0.0;
       hold_start_state_.acceleration[0] = 0.0;
-      hold_end_state_.position[0] = 1.0;
+      hold_end_state_.position[0] = 0.8;
       hold_end_state_.velocity[0] = 0.0;
       hold_end_state_.acceleration[0] = 0.0;
     }
 
     (*hold_com_trajectory_ptr_)[i].front().init(start_time, hold_start_state_,
-						end_time, hold_end_state_);
+						start_time + 2.0, hold_end_state_);
     (*hold_com_trajectory_ptr_)[i].front().setGoalHandle(gh);
   }
 
