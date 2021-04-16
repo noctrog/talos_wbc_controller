@@ -20,7 +20,7 @@
 namespace talos_wbc_controller {
 
   QpFormulation::QpFormulation(const std::string& urdf_path)
-    : task_weight_{0.5, 0.5}, joint_task_dynamics_{10000.0, 200.0},
+    : task_weight_{0.4, 0.6}, joint_task_dynamics_{16000.0, 252.0},
       com_task_dynamics_{10000.0, 200.0},
       mu_(0.4), bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
       des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},

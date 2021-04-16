@@ -301,11 +301,11 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
   // Controller parameters
-  ddr_->registerVariable<double>("Joint_Kp", 10000.0,
+  ddr_->registerVariable<double>("Joint_Kp", 16000.0,
 				boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
 				"Position constant for the QP problem",
 				0.0, 2e4);
-  ddr_->registerVariable<double>("Joint_Kv", 200.0,
+  ddr_->registerVariable<double>("Joint_Kv", 252.0,
 				boost::bind(&JointTrajectoryWholeBodyController::paramJointKvCB, this, _1),
 				"Velocity constant for the QP problem",
 				0.0, 500);
@@ -317,11 +317,11 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 				boost::bind(&JointTrajectoryWholeBodyController::paramComKvCB, this, _1),
 				"Velocity constant for the QP problem",
 				0.0, 500);
-  ddr_->registerVariable<double>("joint_task_weight", 0.5,
+  ddr_->registerVariable<double>("joint_task_weight", 0.4,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramJointTaskWeight, this, _1),
 				 "Joint task weight",
 				 0.0, 1.0);
-  ddr_->registerVariable<double>("com_task_weight", 0.5,
+  ddr_->registerVariable<double>("com_task_weight", 0.6,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramComTaskWeight, this, _1),
 				 "Center of mass task weight",
 				 0.0, 1.0);
@@ -346,11 +346,11 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   SolverConstraints_.b_actuation_limits_constraint = true;
   SolverConstraints_.b_contact_stability_constraint = true;
 
-  SolverWeights_.joint_task_weight = 0.5;
-  SolverWeights_.com_task_weight = 0.5;
+  SolverWeights_.joint_task_weight = 0.4;
+  SolverWeights_.com_task_weight = 0.6;
 
-  JointTaskDynamics_.Kp = 10000.0;
-  JointTaskDynamics_.Kv = 200.0;
+  JointTaskDynamics_.Kp = 16000.0;
+  JointTaskDynamics_.Kv = 252.0;
   ComTaskDynamics_.Kp = 10000.0;
   ComTaskDynamics_.Kv = 200.0;
 
@@ -934,8 +934,6 @@ setHoldPosition(const ros::Time& time, RealtimeGoalHandlePtr gh)
   for (unsigned int i = 0; i < n_joints; ++i) {
     hold_start_state_.position[0] = joints_[i].getPosition();
     hold_start_state_.velocity[0] = joints_[i].getVelocity();
-    // hold_start_state_.position[0] = q_hold[i];
-    // hold_start_state_.velocity[0] = 0.0;
     hold_start_state_.acceleration[0] = 0.0;
 
     hold_end_state_.position[0] = q_hold[i];
