@@ -298,30 +298,37 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   robot_base_link_state_ = controller_nh_.subscribe("/floating_base_pose_simulated", 1,
 						    &JointTrajectoryWholeBodyController::baseLinkCB, this);
 
+  // Initialize the solver
+  ROS_INFO("Loading URDF model...");
+  std::string xpp_talos_path = ros::package::getPath("talos_wbc_controller");
+  if (xpp_talos_path.size() == 0) {
+    std::runtime_error("Could not find the urdf model! Check if it is located "
+                       "in the urdf folder!");
+  }
+  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
+  solver_.reset(new Solver(urdf_path));
+
+  const double Kpj = 16000.0;
+  const double Kpc = 10000.0;
+  const double wj = 0.4;
+  const double wc = 0.6;
+
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
   // Controller parameters
-  ddr_->registerVariable<double>("Joint_Kp", 16000.0,
+  ddr_->registerVariable<double>("Joint_Kp", Kpj,
 				boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
 				"Position constant for the QP problem",
-				0.0, 2e4);
-  ddr_->registerVariable<double>("Joint_Kv", 252.0,
-				boost::bind(&JointTrajectoryWholeBodyController::paramJointKvCB, this, _1),
-				"Velocity constant for the QP problem",
-				0.0, 500);
-  ddr_->registerVariable<double>("CoM_Kp", 10000.0,
+				0.0, 2e5);
+  ddr_->registerVariable<double>("CoM_Kp", Kpc,
 				boost::bind(&JointTrajectoryWholeBodyController::paramComKpCB, this, _1),
 				"Position constant for the QP problem",
-				0.0, 2e4);
-  ddr_->registerVariable<double>("CoM_Kv", 200.0,
-				boost::bind(&JointTrajectoryWholeBodyController::paramComKvCB, this, _1),
-				"Velocity constant for the QP problem",
-				0.0, 500);
-  ddr_->registerVariable<double>("joint_task_weight", 0.4,
+				0.0, 2e5);
+  ddr_->registerVariable<double>("joint_task_weight", wj,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramJointTaskWeight, this, _1),
 				 "Joint task weight",
 				 0.0, 1.0);
-  ddr_->registerVariable<double>("com_task_weight", 0.6,
+  ddr_->registerVariable<double>("com_task_weight", wc,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramComTaskWeight, this, _1),
 				 "Center of mass task weight",
 				 0.0, 1.0);
@@ -346,23 +353,11 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   SolverConstraints_.b_actuation_limits_constraint = true;
   SolverConstraints_.b_contact_stability_constraint = true;
 
-  SolverWeights_.joint_task_weight = 0.4;
-  SolverWeights_.com_task_weight = 0.6;
+  paramJointKpCB(Kpj);
+  paramComKpCB(Kpc);
+  paramJointTaskWeight(wj);
+  paramComTaskWeight(wc);
 
-  JointTaskDynamics_.Kp = 16000.0;
-  JointTaskDynamics_.Kv = 252.0;
-  ComTaskDynamics_.Kp = 10000.0;
-  ComTaskDynamics_.Kv = 200.0;
-
-  // Initialize the solver
-  ROS_INFO("Loading URDF model...");
-  std::string xpp_talos_path = ros::package::getPath("talos_wbc_controller");
-  if (xpp_talos_path.size() == 0) {
-    std::runtime_error("Could not find the urdf model! Check if it is located "
-                       "in the urdf folder!");
-  }
-  std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
-  solver_.reset(new Solver(urdf_path));
   return true;
 }
 
@@ -988,14 +983,7 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::paramJointKpCB(double new_kp)
 {
   JointTaskDynamics_.Kp = new_kp;
-  solver_->SetJointTaskDynamics(JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
-}
-
-template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
-void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
-::paramJointKvCB(double new_kv)
-{
-  JointTaskDynamics_.Kv = new_kv;
+  JointTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
   solver_->SetJointTaskDynamics(JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
 }
 
@@ -1004,14 +992,7 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::paramComKpCB(double new_kp)
 {
   ComTaskDynamics_.Kp = new_kp;
-  solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
-}
-
-template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
-void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
-::paramComKvCB(double new_kv)
-{
-  ComTaskDynamics_.Kv = new_kv;
+  ComTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
   solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
 }
 

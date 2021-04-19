@@ -268,9 +268,7 @@ private:
   void paramJointTaskWeight(double w);
   void paramComTaskWeight(double w);
   void paramJointKpCB(double new_kp);
-  void paramJointKvCB(double new_kv);
   void paramComKpCB(double new_kp);
-  void paramComKvCB(double new_kv);
   // Active constraints
   struct {
     bool b_equation_of_motion_constraint;
