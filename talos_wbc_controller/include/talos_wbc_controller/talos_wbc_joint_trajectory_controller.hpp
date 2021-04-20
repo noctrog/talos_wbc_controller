@@ -267,6 +267,7 @@ private:
   std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddr_;
   void paramJointTaskWeight(double w);
   void paramComTaskWeight(double w);
+  void paramMu(double mu);
   void paramJointKpCB(double new_kp);
   void paramComKpCB(double new_kp);
   // Active constraints
@@ -281,6 +282,8 @@ private:
     double joint_task_weight;
     double com_task_weight;
   } SolverWeights_;
+  // Friction coefficient
+  double mu_;
   // Task dynamics
   struct TaskDynamics {
     double Kp, Kv;

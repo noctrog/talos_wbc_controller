@@ -312,18 +312,23 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   const double Kpc = 10000.0;
   const double wj = 0.4;
   const double wc = 0.6;
+  const double mu = 0.4;
 
   // Dynamic reconfigure used to tune the Kp and Kv constants
   ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(controller_nh));
   // Controller parameters
   ddr_->registerVariable<double>("Joint_Kp", Kpj,
-				boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
-				"Position constant for the QP problem",
-				0.0, 2e5);
+				 boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
+				 "Position constant for the QP problem",
+				 0.0, 2e5);
   ddr_->registerVariable<double>("CoM_Kp", Kpc,
-				boost::bind(&JointTrajectoryWholeBodyController::paramComKpCB, this, _1),
-				"Position constant for the QP problem",
-				0.0, 2e5);
+				 boost::bind(&JointTrajectoryWholeBodyController::paramComKpCB, this, _1),
+				 "Position constant for the QP problem",
+				 0.0, 2e5);
+  ddr_->registerVariable<double>("Friction_coefficient", mu,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramMu, this, _1),
+				 "Friction coefficient for all contacts",
+				 0.0, 1.0);
   ddr_->registerVariable<double>("joint_task_weight", wj,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramJointTaskWeight, this, _1),
 				 "Joint task weight",
@@ -994,6 +999,14 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   ComTaskDynamics_.Kp = new_kp;
   ComTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
   solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramMu(double mu)
+{
+  mu_ = mu;
+  solver_->SetFrictionCoefficient(mu);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>

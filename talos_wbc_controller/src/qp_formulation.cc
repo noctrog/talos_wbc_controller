@@ -580,4 +580,10 @@ namespace talos_wbc_controller {
     com_task_dynamics_.Kv = kv;
   }
 
+  void
+  QpFormulation::SetFrictionCoefficient(double mu)
+  {
+    mu_ = mu;
+  }
+
 } // namespace talos_wbc_controller

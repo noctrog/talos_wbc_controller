@@ -140,6 +140,11 @@ public:
   void SetComTaskWeight(double w);
 
   /**
+   * @brief Sets the friction coefficient for all contacts for all contacts.
+   */
+  void SetFrictionCoefficient(double mu);
+
+  /**
    * @brief Builds all the matrices for the QP program.
    * 
    * You need to call @ref SetRobotState, @ref SetPositionErrors,
