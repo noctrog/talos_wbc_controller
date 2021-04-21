@@ -58,7 +58,8 @@ namespace talos_wbc_controller {
   void
   QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
 			       const JointPos& q, const JointVel& qd,
-			       const ContactNameList contact_names)
+			       const ContactNameList& contact_names,
+			       const ContactOrientationList& contact_orientations)
   {
     if (base_pos.size() != 7 or base_vel.size() != 6) {
       std::cerr << "SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively";
@@ -68,32 +69,48 @@ namespace talos_wbc_controller {
       std::cerr << "SetRobotState: number of joints does not match with the robot model";
       return;
     }
+    if (not contact_orientations.empty() && contact_orientations.size() != contact_names.size()) {
+      std::cerr << "SetRobotState: number of contact names and orientations do not match";
+      return;
+    }
 
     // Convert to Eigen without copying memory 
     q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
     qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
 
-    // Save the new contact names
-    contact_names_ = contact_names;
+    // Save the new contacts
+    const int n_contacts = contact_names.size();
+    ContactList new_contacts(n_contacts);
+    for (int i = 0; i < n_contacts; ++i) {
+      // Save contact name
+      new_contacts[i].contact_name = contact_names[i];
 
-    // Retrieve contact frame ids
-    contact_frames_ids_.clear();
-    for (const ContactName& name : contact_names_) {
+      // Save contact frames
       // If contact is the name of a family, include all of its contacts
+      const auto& name = new_contacts[i].contact_name;
       const auto cf = std::find_if(std::begin(contact_families_), std::end(contact_families_),
 				   [name](const ContactFamily& cf){return cf.family_name.compare(name) == 0;});
       if (cf != std::end(contact_families_)) {
 	for (const ContactName& contact_name : cf->contact_names) {
 	  // There is no need to check because every contact in the family is checked in advance
-	  contact_frames_ids_.push_back(model_->getFrameId(contact_name));
+	  new_contacts[i].contact_frames_ids.push_back(model_->getFrameId(contact_name));
 	}
       } else {
 	// Add a normal contact
 	const int id = model_->getFrameId(name);
 	if (id < model_->frames.size())
-	  contact_frames_ids_.push_back(id);
+	  new_contacts[i].contact_frames_ids = { id };
+      }
+
+      // Save contact orientations
+      if (not contact_orientations.empty()) {
+	new_contacts[i].contact_orientation = contact_orientations[i];
+      } else {
+	// By default, the contact surface is a horizontal plane
+	new_contacts[i].contact_orientation = Eigen::Matrix3d::Identity();
       }
     }
+    contacts_ = std::move(new_contacts);
 
     // Computes the joint space inertia matrix (M)
     pinocchio::crba(*model_, *data_, q_);  // This only computes the upper triangular part
@@ -103,12 +120,14 @@ namespace talos_wbc_controller {
 
     // Compute contact jacobians
     contact_jacobians_.clear();
-    for (const auto id : contact_frames_ids_) {
-      Eigen::MatrixXd J(6, model_->nv); J.setZero();
-      pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
-				      pinocchio::ReferenceFrame::WORLD,
-				      J);
-      contact_jacobians_.push_back(J.block(0, 0, 3, model_->nv));   // Ignore the contact wrenches
+    for (const auto& contact : contacts_) {
+      for (const auto& id : contact.contact_frames_ids) {
+	Eigen::MatrixXd J(6, model_->nv); J.setZero();
+	pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
+					pinocchio::ReferenceFrame::WORLD,
+					J);
+	contact_jacobians_.push_back(J.block(0, 0, 3, model_->nv));   // Ignore the contact wrenches
+      }
     }
 
     // Center of mass computations
@@ -273,7 +292,7 @@ namespace talos_wbc_controller {
 	current_row += u_max_.size();
 	break;
       case ConstraintName::CONTACT_STABILITY: {
-        int n_jac = contact_frames_ids_.size();
+        int n_jac = contact_jacobians_.size();
         const auto lower = -Eigen::VectorXd::Constant(5 * n_jac, OsqpEigen::INFTY);
         const auto upper =  Eigen::VectorXd::Constant(5 * n_jac, 0.0);
         l_.segment(current_row, lower.size()) = lower;
@@ -291,7 +310,7 @@ namespace talos_wbc_controller {
   QpFormulation::UpdateLinearConstraints(void)
   {
     // Calculate the stacked contact jacobian
-    size_t n_jac = contact_frames_ids_.size();
+    size_t n_jac = contact_jacobians_.size();
     Eigen::MatrixXd J(3 * n_jac, model_->nv); J.setZero();
     for (size_t i = 0; i < n_jac; ++i) {
       J.block(i * 3, 0, 3, model_->nv) = contact_jacobians_[i];
@@ -343,20 +362,25 @@ namespace talos_wbc_controller {
 	break;
       case ConstraintName::CONTACT_STABILITY: {
 	if (n_jac > 0) {
-	  // For the moment ignore torques
-	  Eigen::Vector3d ti(1.0, 0.0, 0.0), bi(0.0, 1.0, 0.0),
-	      ni(0.0, 0.0, 1.0);
-	  Eigen::MatrixXd friction =
-	      Eigen::MatrixXd::Zero(5 * n_jac, 3 * n_jac);
-	  for (size_t i = 0; i < n_jac; ++i) {
-	    // Force pointing upwards (negative to keep all bounds equal)
-	    friction.block<1, 3>(i * 5, i * 3) = -ni;
-	    // Aproximate friction cone
-	    friction.block<1, 3>(i * 5 + 1, i * 3) =  (ti - mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 2, i * 3) = -(ti + mu_ * ni);
-	    friction.block<1, 3>(i * 5 + 3, i * 3) =  (bi - mu_ * ni);
-            friction.block<1, 3>(i * 5 + 4, i * 3) = -(bi + mu_ * ni);
-          }
+	  Eigen::MatrixXd friction = Eigen::MatrixXd::Zero(5 * n_jac, 3 * n_jac);
+	  int i = 0;
+	  for (const auto& contact : contacts_) {
+	    for (const auto& id : contact.contact_frames_ids) {
+	      // For the moment ignore torques
+	      const Eigen::Vector3d ti = contact.contact_orientation.col(0);
+	      const Eigen::Vector3d bi = contact.contact_orientation.col(1);
+	      const Eigen::Vector3d ni = contact.contact_orientation.col(2);
+	      // Force pointing upwards (negative to keep all bounds equal)
+	      friction.block<1, 3>(i * 5, i * 3) = -ni;
+	      // Aproximate friction cone
+	      friction.block<1, 3>(i * 5 + 1, i * 3) =  (ti - mu_ * ni);
+	      friction.block<1, 3>(i * 5 + 2, i * 3) = -(ti + mu_ * ni);
+	      friction.block<1, 3>(i * 5 + 3, i * 3) =  (bi - mu_ * ni);
+	      friction.block<1, 3>(i * 5 + 4, i * 3) = -(bi + mu_ * ni);
+
+	      ++i;
+	    }
+	  }
 
 	  insert_in_A(friction, current_row, model_->nv);
 	  current_row += friction.rows();
@@ -452,7 +476,7 @@ namespace talos_wbc_controller {
   int
   QpFormulation::GetNumVariables(void) const
   {
-    const int n_jac = contact_frames_ids_.size();
+    const int n_jac = contact_jacobians_.size();
     return model_->nv + 3 * n_jac + (model_->njoints - 2);
   }
 
@@ -486,14 +510,14 @@ namespace talos_wbc_controller {
       else
 	return 0;
     case ConstraintName::FIXED_CONTACT_CONDITION:
-      return 3 * contact_frames_ids_.size();
+      return 3 * contact_jacobians_.size();
     case ConstraintName::ACTUATION_LIMITS:
       if (model_)
 	return model_->njoints - 2;
       else
 	return 0;
     case ConstraintName::CONTACT_STABILITY:
-      return 5 * contact_frames_ids_.size();
+      return 5 * contact_jacobians_.size();
     default:
       std::runtime_error("Please define the number of rows of the constraint!");
     }
@@ -502,7 +526,7 @@ namespace talos_wbc_controller {
   Eigen::MatrixXd
   QpFormulation::ComputedJqd(void) const
   {
-    const int n_jac = contact_frames_ids_.size();
+    const int n_jac = contact_jacobians_.size();
     Eigen::VectorXd dJqd;
     if (n_jac > 0) {
       dJqd = Eigen::VectorXd(n_jac * 3); // Reserve memory
@@ -510,13 +534,16 @@ namespace talos_wbc_controller {
       // Compute the needed forward kinematics for the current robot state
       pinocchio::forwardKinematics(*model_, *data_, q_, qd_, 0 * qd_);
       // Compute the frame acceleration constraint for every contact
-      for (size_t i = 0; i < n_jac; ++i) {
-	auto a = pinocchio::getFrameClassicalAcceleration(
-	    *model_, *data_, contact_frames_ids_[i],
-	    pinocchio::ReferenceFrame::WORLD);
-	dJqd.segment(i * 3, 3) << a.linear();
-      }
+      size_t i = 0;
+      for (const auto& contact : contacts_) {
+	for (const auto& id : contact.contact_frames_ids) {
+	  auto a = pinocchio::getFrameClassicalAcceleration(
+		      *model_, *data_, id, pinocchio::ReferenceFrame::WORLD);
+	  dJqd.segment(i * 3, 3) << a.linear();
 
+	  ++i;
+	}
+      }
     } else {
       dJqd = Eigen::VectorXd::Constant(0, 0.0);
     }

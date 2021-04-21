@@ -48,6 +48,8 @@ public:
   // Contacts
   typedef std::string ContactName;
   typedef std::vector<ContactName> ContactNameList;
+  typedef Eigen::Matrix3d ContactOrientation;
+  typedef std::vector<ContactOrientation> ContactOrientationList;
   struct ContactFamily {
     ContactName family_name;
     ContactNameList contact_names;
@@ -60,6 +62,13 @@ public:
   };
   typedef std::vector<ContactFamily> ContactFamilyList;
 
+  struct Contact {
+    ContactName contact_name;
+    ContactOrientation contact_orientation;
+    std::vector<int> contact_frames_ids;
+  };
+  typedef std::vector<Contact> ContactList;
+
   QpFormulation(const std::string& urdf_path);
   virtual ~QpFormulation() = default;
 
@@ -67,10 +76,34 @@ public:
    * Updates the robot state. It automatically computes the inertia,
    * nonlinear, stacked contact jacobian and stacked contact jacobian
    * time derivative.
+   *
+   * @param base_pos: position of the base link with respect to
+   * WORLD. 7 dimensions: 3 for linear position and 4 for orientation
+   * (quaternion).
+   *
+   * @param base_vel: velocity of the base link with respect to
+   * WORLD. 6 dimensions: 3 for linear velocity and 3 for angular
+   * velocity.
+   *
+   * @param q: joint positions.
+   *
+   * @param qd: joint velocities.
+   *
+   * @param contact_names: list of the names of the links or contact
+   * families (see @ref SetContactFamily) that are currently active.
+   *
+   * @param contact_orientations: list of 3x3 rotation matrices with
+   * respect to WORLD that represent the orientation of each
+   * unilateral contact. X and Y cols define the contact plane and Z
+   * corresponds to the normal of the plane. X and Y can be any vector
+   * as long as they are orthogonal and are inside the contact
+   * plane. The default is a XY plane.
+   *
    */
-  void SetRobotState(const SpatialPos&, const SpatialVel&,
-		     const JointPos&, const JointVel&,
-		     const ContactNameList);
+  void SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
+		     const JointPos& q, const JointVel& qd,
+		     const ContactNameList& contact_names,
+		     const ContactOrientationList& contact_orientations = {});
 
   /**
    * @brief Defines a contact family. The newly contact family
@@ -298,8 +331,7 @@ private:
 
   // The current contact jacobians
   ContactJacobians contact_jacobians_;
-  ContactNameList contact_names_;
-  std::vector<int> contact_frames_ids_;
+  ContactList contacts_;
   double mu_; /// Friction coeficient
 
   // Selection matrix;
