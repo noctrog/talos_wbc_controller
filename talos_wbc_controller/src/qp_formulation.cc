@@ -54,30 +54,11 @@ namespace talos_wbc_controller {
   SetSolverParameters();
 }
 
+
   void
-  QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
-			       const JointPos& q, const JointVel& qd,
-			       const ContactNameList& contact_names,
-			       const ContactOrientationList& contact_orientations)
+  QpFormulation::SaveContacts(const ContactNameList& contact_names,
+			      const ContactOrientationList& contact_orientations)
   {
-    if (base_pos.size() != 7 or base_vel.size() != 6) {
-      std::cerr << "SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively";
-      return;
-    }
-    if (q.size() != (model_->njoints - 2) or qd.size() != (model_->njoints - 2)) {
-      std::cerr << "SetRobotState: number of joints does not match with the robot model";
-      return;
-    }
-    if (not contact_orientations.empty() && contact_orientations.size() != contact_names.size()) {
-      std::cerr << "SetRobotState: number of contact names and orientations do not match";
-      return;
-    }
-
-    // Convert to Eigen without copying memory 
-    q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
-    qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
-
-    // Save the new contacts
     const int n_contacts = contact_names.size();
     ContactList new_contacts(n_contacts);
     for (int i = 0; i < n_contacts; ++i) {
@@ -110,6 +91,33 @@ namespace talos_wbc_controller {
       }
     }
     contacts_ = std::move(new_contacts);
+  }
+
+  void
+  QpFormulation::SetRobotState(const SpatialPos& base_pos, const SpatialVel& base_vel,
+			       const JointPos& q, const JointVel& qd,
+			       const ContactNameList& contact_names,
+			       const ContactOrientationList& contact_orientations)
+  {
+    if (base_pos.size() != 7 or base_vel.size() != 6) {
+      std::cerr << "SetRobotState: size of base_link position or velocity is wrong! Must be 7 and 6 respectively";
+      return;
+    }
+    if (q.size() != (model_->njoints - 2) or qd.size() != (model_->njoints - 2)) {
+      std::cerr << "SetRobotState: number of joints does not match with the robot model";
+      return;
+    }
+    if (not contact_orientations.empty() && contact_orientations.size() != contact_names.size()) {
+      std::cerr << "SetRobotState: number of contact names and orientations do not match";
+      return;
+    }
+
+    // Convert to Eigen without copying memory 
+    q_  << Eigen::VectorXd::Map(base_pos.data(), base_pos.size()), Eigen::VectorXd::Map(q.data(), q.size());
+    qd_ << Eigen::VectorXd::Map(base_vel.data(), base_vel.size()), Eigen::VectorXd::Map(qd.data(), qd.size());
+
+    // Save the new contacts
+    SaveContacts(contact_names, contact_orientations);
 
     // Computes the joint space inertia matrix (M)
     pinocchio::crba(*model_, *data_, q_);  // This only computes the upper triangular part

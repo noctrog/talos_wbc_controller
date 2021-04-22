@@ -265,6 +265,12 @@ public:
 
 private:
 
+  /**
+   * @brief Given a list of contact names and orientations, saves a copy of them in the class.
+   */
+  void SaveContacts(const ContactNameList& contact_names,
+		    const ContactOrientationList& contact_orientations);
+
   // Dynamics algorithms
   /** 
    * @brief Computes the term dJ * qd for the current robot configuration
