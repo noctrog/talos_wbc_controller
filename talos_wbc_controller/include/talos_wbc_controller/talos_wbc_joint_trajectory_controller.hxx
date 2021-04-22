@@ -308,8 +308,13 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   std::string urdf_path = xpp_talos_path + "/urdf/talos_full_legs_v2_sole_support.urdf";
   solver_.reset(new Solver(urdf_path));
 
-  const double Kpj = 16000.0;
-  const double Kpc = 10000.0;
+  // Set the solver tasks
+  using namespace talos_wbc_controller;
+  solver_->PushTask(QpFormulation::TaskName::FOLLOW_JOINT);
+  solver_->PushTask(QpFormulation::TaskName::FOLLOW_COM);
+
+  const double Kpj = 30000.0;
+  const double Kpc = 40000.0;
   const double wj = 0.4;
   const double wc = 0.6;
   const double mu = 0.4;
@@ -551,8 +556,8 @@ update(const ros::Time& time, const ros::Duration& period)
 
   // Solve QP problem
   // Set the solver parameters
-  solver_->SetJointTaskWeight(SolverWeights_.joint_task_weight);
-  solver_->SetComTaskWeight(SolverWeights_.com_task_weight);
+  solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_JOINT, SolverWeights_.joint_task_weight);
+  solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_COM, SolverWeights_.com_task_weight);
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,

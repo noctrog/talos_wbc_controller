@@ -20,11 +20,10 @@
 namespace talos_wbc_controller {
 
   QpFormulation::QpFormulation(const std::string& urdf_path)
-    : task_weight_{0.4, 0.6}, joint_task_dynamics_{16000.0, 252.0},
-      com_task_dynamics_{10000.0, 200.0},
-      mu_(0.4), bWarmStart_(false), active_constraints_{}, last_num_constraints_(0),
+    : task_weight_{}, joint_task_dynamics_{16000.0, 252.0}, com_task_dynamics_{10000.0, 200.0},
+      mu_(0.4), bWarmStart_(false), last_num_constraints_(0),
       des_com_pos_{0.0, 0.0, 1.0}, des_com_vel_{0.0, 0.0, 0.0},
-      contact_families_{}
+      contact_families_{}, active_tasks_{}, active_constraints_{}
 {
   // Create model and data objects
   model_ = std::make_shared<Model>();
@@ -188,46 +187,60 @@ namespace talos_wbc_controller {
   }
 
   void
-  QpFormulation::SetJointTaskWeight(double w)
+  QpFormulation::SetTaskWeight(const TaskName task, const Weight w)
   {
-    task_weight_.joint = w;
+    if (TaskName::TOTAL_TASKS != task)
+      task_weight_[static_cast<size_t>(task)] = w;
   }
 
-  void
-  QpFormulation::SetComTaskWeight(double w)
+  QpFormulation::Weight
+  QpFormulation::GetTaskWeight(const TaskName task)
   {
-    task_weight_.com = w;
+    if (TaskName::TOTAL_TASKS != task)
+      return task_weight_[static_cast<size_t>(task)];
+    else
+      return 0.0;
   }
 
   void
   QpFormulation::UpdateHessianMatrix(void)
   {
-    // Joint task cost
-    // The joint task cost is proportional to the identity matrix
-    typedef Eigen::Triplet<double> T;
-    std::vector<T> triplet_v;
-    triplet_v.reserve(model_->njoints - 2);
-    for (size_t i = 0; i < model_->njoints - 2; ++i)
-      triplet_v.emplace_back(i+6, i+6, 1.0);
-
     // Get matrix dimensions
     const int cols = GetNumVariables();
-
-    Eigen::SparseMatrix<double> P_joint_task(cols, cols);
-    P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
-
-    // Center of mass task
-    Eigen::SparseMatrix<double> P_com_task(cols, cols);
+    // Reset sparse matrix
+    P_ = Eigen::SparseMatrix<double>(cols, cols);
+    
     auto insert_in_sparse = [](Eigen::SparseMatrix<double>& S, const Eigen::MatrixXd &m, int i, int j) {
       for (size_t x = 0; x < m.rows(); ++x)
 	for (size_t y = 0; y < m.cols(); ++y)
 	  S.insert(i + x, j + y) = m(x, y);
     };
-    const auto& Jcom = data_->Jcom;
-    insert_in_sparse(P_com_task, Jcom.transpose() * Jcom, 0, 0);
 
-    // Join all tasks
-    P_ = P_joint_task * task_weight_.joint + P_com_task * task_weight_.com;
+    for (const auto task : active_tasks_) {
+      switch (task) {
+      case TaskName::FOLLOW_JOINT: {
+	// The joint task cost is proportional to the identity matrix
+	typedef Eigen::Triplet<double> T;
+	std::vector<T> triplet_v;
+	triplet_v.reserve(model_->njoints - 2);
+	for (size_t i = 0; i < model_->njoints - 2; ++i)
+	  triplet_v.emplace_back(i+6, i+6, 1.0);
+	Eigen::SparseMatrix<double> P_joint_task(cols, cols);
+	P_joint_task.setFromTriplets(triplet_v.begin(), triplet_v.end());
+	P_ += P_joint_task * GetTaskWeight(task);
+	break;
+      }
+      case TaskName::FOLLOW_COM: {
+	Eigen::SparseMatrix<double> P_com_task(cols, cols);
+	const auto& Jcom = data_->Jcom;
+	insert_in_sparse(P_com_task, Jcom.transpose() * Jcom, 0, 0);
+	P_ += P_com_task * GetTaskWeight(task);
+	break;
+      }
+      default:
+	std::runtime_error("Task hessian matrix not implemented!");
+      }
+    }
   }
 
   void
@@ -242,25 +255,36 @@ namespace talos_wbc_controller {
 
     // Get matrix dimensions
     const int cols = GetNumVariables();
-    // Calculate joint gradient matrix
-    Eigen::VectorXd q_joint(cols);
-    Kp = joint_task_dynamics_.Kp;
-    Kv = joint_task_dynamics_.Kv;
-    q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp * ep + Kv * ev),
-      Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
 
-    // Center of mass task
-    Eigen::VectorXd q_com(cols);
-    const Eigen::Vector3d& dJqd = data_->acom[0];
-    const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
-    const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
-    Kp = com_task_dynamics_.Kp;
-    Kv = com_task_dynamics_.Kv;
-    const Eigen::VectorXd q_aux = -(dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
-    q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
+    // Reset gradient matrix
+    g_ = Eigen::VectorXd::Zero(cols);
 
-    // Join all tasks
-    g_ = q_joint * task_weight_.joint + q_com * task_weight_.com;
+    for (const auto task : active_tasks_) {
+      switch (task) {
+      case TaskName::FOLLOW_JOINT: {
+	Eigen::VectorXd q_joint(cols);
+	Kp = joint_task_dynamics_.Kp;
+	Kv = joint_task_dynamics_.Kv;
+	q_joint << Eigen::VectorXd::Constant(6, 0.0), -(qrdd + Kp * ep + Kv * ev),
+	  Eigen::VectorXd::Constant(cols - model_->nv, 0.0);
+	g_ += q_joint * GetTaskWeight(task);
+	break;
+      }
+      case TaskName::FOLLOW_COM: {
+	Eigen::VectorXd q_com(cols);
+	const Eigen::Vector3d& dJqd = data_->acom[0];
+	const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
+	const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
+	Kp = com_task_dynamics_.Kp;
+	Kv = com_task_dynamics_.Kv;
+	const Eigen::VectorXd q_aux = -(dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
+	q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
+	g_ += q_com * GetTaskWeight(task);
+      }
+      default:
+	std::runtime_error("Task gradient matrix not implemented!");
+      }
+    }
   }
 
   void
@@ -489,15 +513,35 @@ namespace talos_wbc_controller {
   }
 
   void
+  QpFormulation::ClearTasks(void)
+  {
+    active_tasks_.clear();
+  }
+
+  void
   QpFormulation::ClearConstraints(void)
   {
     active_constraints_.clear();
   }
 
   void
+  QpFormulation::PushTask(const TaskName task)
+  {
+    // Insert the task if it is not currently present
+    if (std::find(std::begin(active_tasks_), std::end(active_tasks_), task)
+	== active_tasks_.end()) {
+      active_tasks_.push_back(task);
+    }
+  }
+
+  void
   QpFormulation::PushConstraint(const ConstraintName constraint)
   {
-    active_constraints_.push_back(constraint);
+    // Insert constraint if it is not currently present
+    if (std::find(std::begin(active_constraints_), std::end(active_constraints_), constraint)
+	== active_constraints_.end()) {
+      active_constraints_.push_back(constraint);
+    }
   }
 
   int

@@ -2,6 +2,7 @@
 #define QP_FORMULATION_H
 
 #include <vector>
+#include <array>
 #include <memory>
 
 #include <OsqpEigen/Solver.hpp>
@@ -16,16 +17,25 @@ class QpFormulation
 {
 public:
 
+  enum class TaskName {
+    FOLLOW_JOINT = 0,
+    FOLLOW_COM,
+    TOTAL_TASKS
+  };
+
   enum class ConstraintName {
-    EQUATION_OF_MOTION,
+    EQUATION_OF_MOTION = 0,
     FIXED_CONTACT_CONDITION,
     ACTUATION_LIMITS,
-    CONTACT_STABILITY
+    CONTACT_STABILITY,
+    TOTAL_CONSTRAINTS
   };
   
   // QP formulation cost weight
   typedef double Weight;
+  typedef std::array<Weight, static_cast<size_t>(TaskName::TOTAL_TASKS)> WeightList;
   // Constraint list
+  typedef std::vector<TaskName> TaskList;
   typedef std::vector<ConstraintName> ConstraintList;
   // Robot state
   typedef std::vector<double> SpatialPos;
@@ -163,14 +173,14 @@ public:
   void SetComTaskDynamics(const double kp, const double kv);
 
   /**
-   * @brief Sets the joint task weight.
+   * @brief Set the value of a task weight.
    */
-  void SetJointTaskWeight(double w);
+  void SetTaskWeight(const TaskName task, const Weight w);
 
   /**
-   * @brief Sets the center of mass task weight.
+   * @brief Retrieve the weight assigned to a task.
    */
-  void SetComTaskWeight(double w);
+  Weight GetTaskWeight(const TaskName task);
 
   /**
    * @brief Sets the friction coefficient for all contacts for all contacts.
@@ -204,13 +214,23 @@ public:
    */
   Eigen::VectorXd GetSolution(void);
 
+  /**
+   * @brief Removes all active tasks.
+   */
+  void ClearTasks(void);
+  
   /** 
    * @brief Removes all active contraints.
    */
   void ClearConstraints(void);
 
   /**
-   * @brief Inserts a constraint
+   * @brief Inserts a task.
+   */
+  void PushTask(const TaskName task);
+
+  /**
+   * @brief Inserts a constraint.
    */
   void PushConstraint(const ConstraintName constraint);
 
@@ -312,14 +332,12 @@ private:
   /// Upper bound matrix
   Eigen::VectorXd u_;
 
-  // List of currently active constraints
+  // List of currently active tasks and constraints
+  TaskList active_tasks_;
   ConstraintList active_constraints_;
 
   // Joint state task
-  struct {
-    Weight joint;
-    Weight com;
-  } task_weight_;
+  WeightList task_weight_;
   PosErrors ep_;
   VelErrors ev_;
   AccVector qrdd_;
