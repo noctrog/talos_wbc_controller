@@ -34,8 +34,12 @@ public:
   // QP formulation cost weight
   typedef double Weight;
   typedef std::array<Weight, static_cast<size_t>(TaskName::TOTAL_TASKS)> WeightList;
-  // Constraint list
+  // Tasks and constraints
   typedef std::vector<TaskName> TaskList;
+  struct TaskDynamics {
+    double Kp, Kv;
+  };
+  typedef std::array<TaskDynamics, static_cast<size_t>(TaskName::TOTAL_TASKS)> TaskDynamicsList;
   typedef std::vector<ConstraintName> ConstraintList;
   // Robot state
   typedef std::vector<double> SpatialPos;
@@ -163,14 +167,14 @@ public:
   void SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel);
 
   /**
-   * Sets the constants that define the second order linear dynamics of the joint task.
+   * @brief Sets the dynamic constants of the specified task.
    */
-  void SetJointTaskDynamics(const double kp, const double kv);
+  void SetTaskDynamics(const TaskName task, const double kp, const double kv);
 
   /**
-   * Sets the constants that define the second order linear dynamics of the com task.
+   * @brief Retrieves the dynamics of a given task.
    */
-  void SetComTaskDynamics(const double kp, const double kv);
+  void GetTaskDynamics(const TaskName, double& kp, double& kv);
 
   /**
    * @brief Set the value of a task weight.
@@ -228,6 +232,11 @@ public:
    * @brief Inserts a task.
    */
   void PushTask(const TaskName task);
+
+  /**
+   * @brief Insert a task and update its dynamics parameters.
+   */
+  void PushTask(const TaskName task, const double Kp, const double Kv);
 
   /**
    * @brief Inserts a constraint.
@@ -334,6 +343,7 @@ private:
 
   // List of currently active tasks and constraints
   TaskList active_tasks_;
+  TaskDynamicsList task_dynamics_;
   ConstraintList active_constraints_;
 
   // Joint state task
@@ -341,11 +351,6 @@ private:
   PosErrors ep_;
   VelErrors ev_;
   AccVector qrdd_;
-  struct TaskDynamics {
-    double Kp, Kv;
-  };
-  TaskDynamics joint_task_dynamics_;
-  TaskDynamics com_task_dynamics_;
 
   // The current contact jacobians
   ContactJacobians contact_jacobians_;

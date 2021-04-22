@@ -994,7 +994,8 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 {
   JointTaskDynamics_.Kp = new_kp;
   JointTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
-  solver_->SetJointTaskDynamics(JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
+  using namespace talos_wbc_controller;
+  solver_->SetTaskDynamics(QpFormulation::TaskName::FOLLOW_JOINT, JointTaskDynamics_.Kp, JointTaskDynamics_.Kv);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
@@ -1003,7 +1004,8 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 {
   ComTaskDynamics_.Kp = new_kp;
   ComTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
-  solver_->SetComTaskDynamics(ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
+  using namespace talos_wbc_controller;
+  solver_->SetTaskDynamics(QpFormulation::TaskName::FOLLOW_COM, ComTaskDynamics_.Kp, ComTaskDynamics_.Kv);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
