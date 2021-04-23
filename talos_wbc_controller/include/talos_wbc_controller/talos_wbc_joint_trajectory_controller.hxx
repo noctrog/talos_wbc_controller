@@ -538,8 +538,18 @@ update(const ros::Time& time, const ros::Duration& period)
   const auto& twist = last_base_link_state_.twist.twist;
   std::vector<double> base_pos {pose.position.x, pose.position.y, pose.position.z,
     pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w};
-  std::vector<double> base_vel {twist.linear.x, twist.linear.y, twist.linear.z,
-    twist.angular.x, twist.angular.y, twist.angular.z};
+  // The QpFormulation free floating base velocity is with respect to the base robot frame
+  Eigen::Quaterniond q;
+  q.x() = pose.orientation.x; q.y() = pose.orientation.y;
+  q.z() = pose.orientation.z, q.w() = pose.orientation.w;
+  Eigen::Matrix3d R = q.normalized().toRotationMatrix().inverse();
+  Eigen::Vector3d twist_linear, twist_angular;
+  twist_linear << twist.linear.x, twist.linear.y, twist.linear.z;
+  twist_angular << twist.angular.x, twist.angular.y, twist.angular.z;
+  twist_linear = R * twist_linear;
+  twist_angular = R * twist_angular;
+  std::vector<double> base_vel {twist_linear.x(), twist_linear.y(), twist_linear.z(),
+    twist_angular.x(), twist_angular.y(), twist_angular.z()};
 
   QpFormulation::ComPos com_pos { com_state[0].position[0], com_state[1].position[0], com_state[2].position[0] };
   QpFormulation::ComVel com_vel { com_state[0].velocity[0], com_state[1].velocity[0], com_state[2].velocity[0] };
