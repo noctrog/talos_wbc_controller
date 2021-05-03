@@ -143,8 +143,23 @@ namespace talos_wbc_controller {
     // qd is accessible through data_->acom[0]. This is based in the
     // same principle used in the method QpFormulation::computedJqd
     pinocchio::centerOfMass(*model_, *data_, q_, qd_, 0*qd_);
-    // Compute the CoM jacobian
+    // Compute the CoM jacobian expressed in WORLD frame
     pinocchio::jacobianCenterOfMass(*model_, *data_, q_);
+
+    // Compute the jacobian of the base_link frame.
+    // This jacobian is used for the orientation task.
+    // const int base_frame_id = 2; // TODO: is this always true for freeflyers?
+    const int base_frame_id = model_->getFrameId("base_link");
+    base_link_jacobian_ = Eigen::MatrixXd::Zero(6, model_->nv);
+    pinocchio::computeJointJacobians(*model_, *data_, q_);
+    pinocchio::framesForwardKinematics(*model_, *data_, q_);
+    pinocchio::computeFrameJacobian(*model_, *data_, q_, base_frame_id,
+				    pinocchio::ReferenceFrame::WORLD,
+				    base_link_jacobian_);
+    pinocchio::forwardKinematics(*model_, *data_, q_, qd_, 0.0*qd_);
+    const auto atpl = pinocchio::getFrameClassicalAcceleration(*model_, *data_, base_frame_id,
+							       pinocchio::ReferenceFrame::WORLD);
+    base_link_wdot_ << atpl.angular(); // TODO: always returns 0
   }
 
   void
@@ -174,6 +189,13 @@ namespace talos_wbc_controller {
   {
     des_com_pos_ = Eigen::Vector3d::Map(com_pos.data(), com_pos.size());
     des_com_vel_ = Eigen::Vector3d::Map(com_vel.data(), com_vel.size());
+  }
+
+  void
+  QpFormulation::SetDesiredBaseOrientation(const BaseRot& base_rot, const BaseAngVel& base_ang_vel)
+  {
+    des_base_rot_ = Eigen::Vector3d::Map(base_rot.data(), base_rot.size());
+    des_base_ang_vel_ = Eigen::Vector3d::Map(base_ang_vel.data(), base_ang_vel.size());
   }
 
   void
@@ -245,6 +267,13 @@ namespace talos_wbc_controller {
 	P_ += P_com_task * GetTaskWeight(task);
 	break;
       }
+      case TaskName::FOLLOW_BASE_ORIENTATION: {
+	Eigen::SparseMatrix<double> P_orientation_task(cols, cols);
+	const auto J = base_link_jacobian_.block(3, 0, 3, model_->nv);
+	insert_in_sparse(P_orientation_task, J.transpose() * J, 0, 0);
+	P_ += P_orientation_task * GetTaskWeight(task);
+	break;
+      }
       default:
 	std::runtime_error("Task hessian matrix not implemented!");
       }
@@ -288,6 +317,23 @@ namespace talos_wbc_controller {
 	g_ += q_com * GetTaskWeight(task);
 	break;
       }
+      case TaskName::FOLLOW_BASE_ORIENTATION: {
+	Eigen::VectorXd q_base(cols);
+	const auto J = base_link_jacobian_.block(3, 0, 3, model_->nv);
+	// Calculate RPY of the current base orientation
+	const Eigen::Quaterniond q(Eigen::Vector4d(q_.segment(3, 4)));
+	const Eigen::Matrix3d base_R = q.toRotationMatrix();
+	const Eigen::Vector3d base_rpy = base_R.eulerAngles(0, 1, 2);
+	// Retrieve the term dJ * qd
+	const Eigen::Vector3d& dJqd = base_link_wdot_;
+	// Compute the errors
+	const Eigen::Vector3d& ep = des_base_rot_ - base_rpy;
+	const Eigen::Vector3d& ev = des_base_ang_vel_ - qd_.segment(3, 3);
+	GetTaskDynamics(task, Kp, Kv);
+	const Eigen::VectorXd q_aux = (/*-dJqd*/ + Kp * ep + Kv * ev).transpose() * J;
+	q_base << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
+	g_ += q_base * GetTaskWeight(task);
+	break;
       }
       default:
 	std::runtime_error("Task gradient matrix not implemented!");

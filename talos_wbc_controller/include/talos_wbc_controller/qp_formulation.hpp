@@ -20,6 +20,7 @@ public:
   enum class TaskName {
     FOLLOW_JOINT = 0,
     FOLLOW_COM,
+    FOLLOW_BASE_ORIENTATION,
     TOTAL_TASKS
   };
 
@@ -48,6 +49,8 @@ public:
   typedef std::vector<double> JointVel;
   typedef std::vector<double> ComPos;
   typedef std::vector<double> ComVel;
+  typedef std::vector<double> BaseRot;
+  typedef std::vector<double> BaseAngVel;
   // Robot feedback
   typedef std::vector<double> PosErrors;
   typedef std::vector<double> VelErrors;
@@ -165,6 +168,11 @@ public:
    * Sets the reference for the CoM
    */
   void SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel);
+
+  /**
+   * @brief Sets the desired base_link orientation.
+   */
+  void SetDesiredBaseOrientation(const BaseRot& base_rot, const BaseAngVel& base_ang_vel);
 
   /**
    * @brief Sets the dynamic constants of the specified task.
@@ -363,6 +371,10 @@ private:
   ContactList contacts_;
   double mu_; /// Friction coeficient
 
+  // Base link jacobian
+  Eigen::MatrixXd base_link_jacobian_;
+  Eigen::Vector3d base_link_wdot_; // angular acceleration
+
   // Selection matrix;
   Eigen::MatrixXd S_;
 
@@ -374,6 +386,8 @@ private:
   Eigen::VectorXd q_, qd_;
   // Desired CoM pos and vel
   Eigen::Vector3d des_com_pos_, des_com_vel_;
+  // Desired base rotation and angular velocity
+  Eigen::Vector3d des_base_rot_, des_base_ang_vel_;
 
   // Joint actuator limits
   Eigen::VectorXd u_max_;

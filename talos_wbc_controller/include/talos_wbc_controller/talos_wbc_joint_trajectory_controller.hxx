@@ -312,11 +312,10 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   using namespace talos_wbc_controller;
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_JOINT);
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_COM);
+  // solver_->PushTask(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION);
 
-  const double Kpj = 30000.0;
-  const double Kpc = 40000.0;
-  const double wj = 0.4;
-  const double wc = 0.6;
+  const double Kpj = 30000.0, Kpc = 40000.0, Kpb = 10000.0;
+  const double wj = 0.5, wc = 0.5, wb = 0.0;
   const double mu = 0.4;
 
   // Dynamic reconfigure used to tune the Kp and Kv constants
@@ -324,16 +323,16 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   // Controller parameters
   ddr_->registerVariable<double>("Joint_Kp", Kpj,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramJointKpCB, this, _1),
-				 "Position constant for the QP problem",
+				 "Position constant for the Posture Task",
 				 0.0, 2e5);
   ddr_->registerVariable<double>("CoM_Kp", Kpc,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramComKpCB, this, _1),
-				 "Position constant for the QP problem",
+				 "Position constant for the Center of Mass Task",
 				 0.0, 2e5);
-  ddr_->registerVariable<double>("Friction_coefficient", mu,
-				 boost::bind(&JointTrajectoryWholeBodyController::paramMu, this, _1),
-				 "Friction coefficient for all contacts",
-				 0.0, 1.0);
+  ddr_->registerVariable<double>("Base_Orientation_Kp", Kpb,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramBaseOriKpCB, this, _1),
+				 "Position constant for the Base Orientation Task",
+				 0.0, 2e5);
   ddr_->registerVariable<double>("joint_task_weight", wj,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramJointTaskWeight, this, _1),
 				 "Joint task weight",
@@ -341,6 +340,14 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   ddr_->registerVariable<double>("com_task_weight", wc,
 				 boost::bind(&JointTrajectoryWholeBodyController::paramComTaskWeight, this, _1),
 				 "Center of mass task weight",
+				 0.0, 1.0);
+  ddr_->registerVariable<double>("base_ori_task_weight", wb,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramBaseOriTaskWeight, this, _1),
+				 "Base link orientation task weight",
+				 0.0, 1.0);
+  ddr_->registerVariable<double>("Friction_coefficient", mu,
+				 boost::bind(&JointTrajectoryWholeBodyController::paramMu, this, _1),
+				 "Friction coefficient for all contacts",
 				 0.0, 1.0);
   // Controller constraints
   ddr_->registerVariable<bool>("equation_of_motion", true,
@@ -365,8 +372,10 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
   paramJointKpCB(Kpj);
   paramComKpCB(Kpc);
+  paramBaseOriKpCB(Kpb);
   paramJointTaskWeight(wj);
   paramComTaskWeight(wc);
+  paramBaseOriTaskWeight(wb);
 
   return true;
 }
@@ -568,6 +577,7 @@ update(const ros::Time& time, const ros::Duration& period)
   // Set the solver parameters
   solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_JOINT, SolverWeights_.joint_task_weight);
   solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_COM, SolverWeights_.com_task_weight);
+  solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION, SolverWeights_.base_orientation_task_weight);
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
@@ -1020,6 +1030,16 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
 void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramBaseOriKpCB(double new_kp)
+{
+  BaseOriTaskDynamics_.Kp = new_kp;
+  BaseOriTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
+  using namespace talos_wbc_controller;
+  solver_->SetTaskDynamics(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION, BaseOriTaskDynamics_.Kp, BaseOriTaskDynamics_.Kv);
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
 ::paramMu(double mu)
 {
   mu_ = mu;
@@ -1067,6 +1087,13 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
 ::paramComTaskWeight(double w)
 {
   SolverWeights_.com_task_weight = w;
+}
+
+template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
+void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, HardwareAdapter>
+::paramBaseOriTaskWeight(double w)
+{
+  SolverWeights_.base_orientation_task_weight = w;
 }
 
 } // namespace
