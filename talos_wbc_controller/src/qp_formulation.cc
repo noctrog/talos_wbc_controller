@@ -185,10 +185,32 @@ namespace talos_wbc_controller {
   }
 
   void
-  QpFormulation::SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel)
+  QpFormulation::SetDesiredCoM(const ComPos& com_pos,
+			       const ComVel& com_vel,
+			       const ComAcc& com_acc)
   {
+    // Position
     des_com_pos_ = Eigen::Vector3d::Map(com_pos.data(), com_pos.size());
-    des_com_vel_ = Eigen::Vector3d::Map(com_vel.data(), com_vel.size());
+
+    // Velocity
+    if (com_vel.size() > 0) {
+      des_com_vel_ = Eigen::Vector3d::Map(com_vel.data(), com_vel.size());
+      b_com_vel_specified_ = true;
+    }
+    else {
+      des_com_vel_ = Eigen::Vector3d::Zero();
+      b_com_vel_specified_ = false;
+    }
+
+    // Acceleration
+    if (com_acc.size() > 0) {
+      des_com_acc_ = Eigen::Vector3d::Map(com_acc.data(), com_acc.size());
+      b_com_acc_specified_ = true;
+    }
+    else {
+      des_com_vel_ = Eigen::Vector3d::Zero();
+      b_com_acc_specified_ = false;
+    }
   }
 
   void
@@ -308,11 +330,12 @@ namespace talos_wbc_controller {
       }
       case TaskName::FOLLOW_COM: {
 	Eigen::VectorXd q_com(cols);
-	const Eigen::Vector3d& dJqd = data_->acom[0];
+	const Eigen::Vector3d& dJqd = b_com_acc_specified_ * data_->acom[0];
 	const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
-	const Eigen::Vector3d& ev_m = des_com_vel_ - data_->vcom[0];
+	const Eigen::Vector3d& ev_m = b_com_vel_specified_ * (des_com_vel_ - data_->vcom[0]);
+	const Eigen::Vector3d& des_acc = b_com_acc_specified_ * des_com_acc_;
 	GetTaskDynamics(task, Kp, Kv);
-	const Eigen::VectorXd q_aux = (/* -dJqd +*/ Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
+	const Eigen::VectorXd q_aux = (des_acc - dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
 	q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 	g_ += q_com * GetTaskWeight(task);
 	break;

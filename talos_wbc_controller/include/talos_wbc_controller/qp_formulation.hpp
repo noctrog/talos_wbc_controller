@@ -49,6 +49,7 @@ public:
   typedef std::vector<double> JointVel;
   typedef std::vector<double> ComPos;
   typedef std::vector<double> ComVel;
+  typedef std::vector<double> ComAcc;
   typedef std::vector<double> BaseRot;
   typedef std::vector<double> BaseAngVel;
   // Robot feedback
@@ -167,7 +168,9 @@ public:
   /**
    * Sets the reference for the CoM
    */
-  void SetDesiredCoM(const ComPos& com_pos, const ComVel& com_vel);
+  void SetDesiredCoM(const ComPos& com_pos,
+		     const ComVel& com_vel = {},
+		     const ComAcc& com_acc = {});
 
   /**
    * @brief Sets the desired base_link orientation.
@@ -385,7 +388,8 @@ private:
   // Joint states
   Eigen::VectorXd q_, qd_;
   // Desired CoM pos and vel
-  Eigen::Vector3d des_com_pos_, des_com_vel_;
+  Eigen::Vector3d des_com_pos_, des_com_vel_, des_com_acc_;
+  bool b_com_vel_specified_, b_com_acc_specified_;
   // Desired base rotation and angular velocity
   Eigen::Vector3d des_base_rot_, des_base_ang_vel_;
 

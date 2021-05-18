@@ -562,6 +562,7 @@ update(const ros::Time& time, const ros::Duration& period)
 
   QpFormulation::ComPos com_pos { com_state[0].position[0], com_state[1].position[0], com_state[2].position[0] };
   QpFormulation::ComVel com_vel { com_state[0].velocity[0], com_state[1].velocity[0], com_state[2].velocity[0] };
+  QpFormulation::ComAcc com_acc { com_state[0].acceleration[0], com_state[1].acceleration[0], com_state[2].acceleration[0]};
 
   //If there is an active goal and all segments finished successfully then set goal as succeeded
   RealtimeGoalHandlePtr current_active_goal(rt_active_goal_);
@@ -596,7 +597,7 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->SetPositionErrors(state_error_.position);
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
-  solver_->SetDesiredCoM(com_pos, com_vel);
+  solver_->SetDesiredCoM(com_pos, com_vel, com_acc);
   // Build and solve the problem
   solver_->BuildProblem();
   solver_->SolveProblem();
