@@ -335,7 +335,7 @@ namespace talos_wbc_controller {
 	const Eigen::Vector3d& ev_m = b_com_vel_specified_ * (des_com_vel_ - data_->vcom[0]);
 	const Eigen::Vector3d& des_acc = b_com_acc_specified_ * des_com_acc_;
 	GetTaskDynamics(task, Kp, Kv);
-	const Eigen::VectorXd q_aux = (des_acc - dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
+	const Eigen::VectorXd q_aux = -(des_acc - dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
 	q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 	g_ += q_com * GetTaskWeight(task);
 	break;
@@ -353,7 +353,7 @@ namespace talos_wbc_controller {
 	const Eigen::Vector3d& ep = des_base_rot_ - base_rpy;
 	const Eigen::Vector3d& ev = des_base_ang_vel_ - qd_.segment(3, 3);
 	GetTaskDynamics(task, Kp, Kv);
-	const Eigen::VectorXd q_aux = (/*-dJqd*/ + Kp * ep + Kv * ev).transpose() * J;
+	const Eigen::VectorXd q_aux = -(/*-dJqd*/ + Kp * ep + Kv * ev).transpose() * J;
 	q_base << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 	g_ += q_base * GetTaskWeight(task);
 	break;
