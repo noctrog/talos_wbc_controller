@@ -345,12 +345,16 @@ namespace talos_wbc_controller {
 	const auto J = base_link_jacobian_.block(3, 0, 3, model_->nv);
 	// Calculate RPY of the current base orientation
 	const Eigen::Quaterniond q(Eigen::Vector4d(q_.segment(3, 4)));
-	const Eigen::Matrix3d base_R = q.toRotationMatrix();
-	const Eigen::Vector3d base_rpy = base_R.eulerAngles(0, 1, 2);
+	const Eigen::Matrix3d R = q.toRotationMatrix();
+	const Eigen::Matrix3d dR = Eigen::AngleAxisd(des_base_rot_(0), Eigen::Vector3d::UnitX()) *
+	  Eigen::AngleAxisd(des_base_rot_(1), Eigen::Vector3d::UnitY()) *
+	  Eigen::AngleAxisd(des_base_rot_(2), Eigen::Vector3d::UnitZ()) * R.transpose();
 	// Retrieve the term dJ * qd
 	const Eigen::Vector3d& dJqd = base_link_wdot_;
 	// Compute the errors
-	const Eigen::Vector3d& ep = des_base_rot_ - base_rpy;
+	const Eigen::Vector3d& ep = {dR(0, 1) - dR(1, 2),
+				     dR(0, 2) - dR(2, 0),
+				     dR(1, 0) - dR(2, 1)};
 	const Eigen::Vector3d& ev = des_base_ang_vel_ - qd_.segment(3, 3);
 	GetTaskDynamics(task, Kp, Kv);
 	const Eigen::VectorXd q_aux = -(/*-dJqd*/ + Kp * ep + Kv * ev).transpose() * J;

@@ -312,7 +312,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   using namespace talos_wbc_controller;
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_JOINT);
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_COM);
-  // solver_->PushTask(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION);
+  solver_->PushTask(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION);
 
   const double Kpj = 30000.0, Kpc = 40000.0, Kpb = 10000.0;
   const double wj = 0.5, wc = 0.5, wb = 0.0;
@@ -598,6 +598,8 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
   solver_->SetDesiredCoM(com_pos, com_vel, com_acc);
+  solver_->SetDesiredBaseOrientation({ 0.7 * std::cos(ros::Time::now().toSec() / 2.0), 0.0, 0.0},
+				     {-0.7 * std::sin(ros::Time::now().toSec() / 2.0), 0.0, 0.0});
   // Build and solve the problem
   solver_->BuildProblem();
   solver_->SolveProblem();
