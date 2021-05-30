@@ -330,10 +330,10 @@ namespace talos_wbc_controller {
       }
       case TaskName::FOLLOW_COM: {
 	Eigen::VectorXd q_com(cols);
-	const Eigen::Vector3d& dJqd = b_com_acc_specified_ * data_->acom[0];
-	const Eigen::Vector3d& ep_m = des_com_pos_ - data_->com[0];
-	const Eigen::Vector3d& ev_m = b_com_vel_specified_ * (des_com_vel_ - data_->vcom[0]);
-	const Eigen::Vector3d& des_acc = b_com_acc_specified_ * des_com_acc_;
+	const Eigen::Vector3d dJqd = b_com_acc_specified_ * data_->acom[0];
+	const Eigen::Vector3d ep_m = des_com_pos_ - data_->com[0];
+	const Eigen::Vector3d ev_m = b_com_vel_specified_ * (des_com_vel_ - data_->vcom[0]);
+	const Eigen::Vector3d des_acc = b_com_acc_specified_ * des_com_acc_;
 	GetTaskDynamics(task, Kp, Kv);
 	const Eigen::VectorXd q_aux = -(des_acc - dJqd + Kp * ep_m + Kv * ev_m).transpose() * data_->Jcom;
 	q_com << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
@@ -352,10 +352,10 @@ namespace talos_wbc_controller {
 	// Retrieve the term dJ * qd
 	const Eigen::Vector3d& dJqd = base_link_wdot_;
 	// Compute the errors
-	const Eigen::Vector3d& ep = {dR(0, 1) - dR(1, 2),
-				     dR(0, 2) - dR(2, 0),
-				     dR(1, 0) - dR(2, 1)};
-	const Eigen::Vector3d& ev = des_base_ang_vel_ - qd_.segment(3, 3);
+	const Eigen::Vector3d ep = 0.5 * Eigen::Vector3d {dR(0, 1) - dR(1, 2),
+							  dR(0, 2) - dR(2, 0),
+							  dR(1, 0) - dR(2, 1)};
+	const Eigen::Vector3d ev = des_base_ang_vel_ - qd_.segment(3, 3);
 	GetTaskDynamics(task, Kp, Kv);
 	const Eigen::VectorXd q_aux = -(/*-dJqd*/ + Kp * ep + Kv * ev).transpose() * J;
 	q_base << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
