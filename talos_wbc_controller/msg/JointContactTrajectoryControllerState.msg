@@ -6,4 +6,6 @@ trajectory_msgs/JointTrajectoryPoint error  # Redundant, but useful
 trajectory_msgs/JointTrajectoryPoint com_desired
 trajectory_msgs/JointTrajectoryPoint com_actual
 trajectory_msgs/JointTrajectoryPoint com_error
+trajectory_msgs/JointTrajectoryPoint base_rot_desired
+trajectory_msgs/JointTrajectoryPoint base_rot_actual
 # talos_wbc_controller/JointContactTrajectoryContacts contacts

@@ -237,6 +237,8 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   current_com_state_   = typename Segment::State(3);
   desired_com_state_   = typename Segment::State(3);
   error_com_state_     = typename Segment::State(3);
+  base_rot_state_      = typename Segment::State(3);
+  desired_base_rot_state_ = typename Segment::State(3);
 
   successful_joint_traj_ = boost::dynamic_bitset<>(joints_.size());
 
@@ -598,8 +600,15 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->SetVelocityErrors(state_error_.velocity);
   solver_->SetReferenceAccelerations(desired_state_.acceleration);
   solver_->SetDesiredCoM(com_pos, com_vel, com_acc);
-  solver_->SetDesiredBaseOrientation({ 0.7 * std::cos(ros::Time::now().toSec() / 2.0), 0.0, 0.0},
-				     {-0.7 * std::sin(ros::Time::now().toSec() / 2.0), 0.0, 0.0});
+
+  // Giro eje X
+  auto desired_rot   = typename Segment::State(3);
+  desired_rot.position[0] = 0.7 * std::cos(ros::Time::now().toSec() / 2.0);
+  desired_rot.velocity[0] = -0.7 * std::sin(ros::Time::now().toSec() / 2.0);
+  
+  solver_->SetDesiredBaseOrientation(desired_rot.position, desired_rot.velocity);
+  // solver_->SetDesiredBaseOrientation({ 0.0, 0.0, 0.0}, { 0.0, 0.0, 0.0});
+
   // Build and solve the problem
   solver_->BuildProblem();
   solver_->SolveProblem();
@@ -627,6 +636,14 @@ update(const ros::Time& time, const ros::Duration& period)
     error_com_state_.velocity[i] = desired_com_state_.position[i] - current_com_state_.position[i];
   }
 
+  // Save rotation info
+  auto rot = R.inverse().eulerAngles(0, 1, 2);
+  if (rot.x() > M_PI / 2) rot.x() -= M_PI;
+  base_rot_state_.position = {rot.x(), rot.y(), rot.z()};
+  base_rot_state_.velocity = {twist.linear.x, twist.linear.y, twist.linear.z};
+  desired_base_rot_state_.position = desired_rot.position;
+  desired_base_rot_state_.velocity = desired_rot.velocity;
+
   // Set action feedback
   if (rt_active_goal_ && rt_active_goal_->preallocated_feedback_)
   {
@@ -644,6 +661,10 @@ update(const ros::Time& time, const ros::Duration& period)
     rt_active_goal_->preallocated_feedback_->com_actual.velocities = current_com_state_.position;
     rt_active_goal_->preallocated_feedback_->com_error.positions   = error_com_state_.position;
     rt_active_goal_->preallocated_feedback_->com_actual.velocities = error_com_state_.position;
+    rt_active_goal_->preallocated_feedback_->base_rot_actual.positions = base_rot_state_.position;
+    rt_active_goal_->preallocated_feedback_->base_rot_actual.velocities = base_rot_state_.velocity;
+    rt_active_goal_->preallocated_feedback_->base_rot_desired.positions = desired_base_rot_state_.position;
+    rt_active_goal_->preallocated_feedback_->base_rot_desired.velocities = desired_base_rot_state_.velocity;
     rt_active_goal_->setFeedback( rt_active_goal_->preallocated_feedback_ );
   }
 
@@ -927,6 +948,10 @@ publishState(const ros::Time& time)
       state_publisher_->msg_.com_actual.velocities = current_com_state_.velocity;
       state_publisher_->msg_.com_error.positions   = error_com_state_.position;
       state_publisher_->msg_.com_error.velocities  = error_com_state_.velocity;
+      state_publisher_->msg_.base_rot_desired.positions = desired_base_rot_state_.position;
+      state_publisher_->msg_.base_rot_desired.velocities = desired_base_rot_state_.velocity;
+      state_publisher_->msg_.base_rot_actual.positions = base_rot_state_.position;
+      state_publisher_->msg_.base_rot_actual.velocities = base_rot_state_.velocity;
       state_publisher_->unlockAndPublish();
     }
   }

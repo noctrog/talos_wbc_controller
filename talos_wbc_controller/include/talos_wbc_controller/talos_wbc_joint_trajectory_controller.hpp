@@ -206,6 +206,8 @@ private:
   typename Segment::State current_com_state_;
   typename Segment::State desired_com_state_;
   typename Segment::State error_com_state_;
+  typename Segment::State base_rot_state_;
+  typename Segment::State desired_base_rot_state_;
 
   realtime_tools::RealtimeBuffer<TimeData> time_data_;
 
