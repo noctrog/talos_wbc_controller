@@ -8,4 +8,5 @@ trajectory_msgs/JointTrajectoryPoint com_actual
 trajectory_msgs/JointTrajectoryPoint com_error
 trajectory_msgs/JointTrajectoryPoint base_rot_desired
 trajectory_msgs/JointTrajectoryPoint base_rot_actual
+trajectory_msgs/JointTrajectoryPoint control_signal
 # talos_wbc_controller/JointContactTrajectoryContacts contacts

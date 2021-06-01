@@ -239,6 +239,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   error_com_state_     = typename Segment::State(3);
   base_rot_state_      = typename Segment::State(3);
   desired_base_rot_state_ = typename Segment::State(3);
+  control_signal_      = typename Segment::State(12);
 
   successful_joint_traj_ = boost::dynamic_bitset<>(joints_.size());
 
@@ -644,6 +645,11 @@ update(const ros::Time& time, const ros::Duration& period)
   desired_base_rot_state_.position = desired_rot.position;
   desired_base_rot_state_.velocity = desired_rot.velocity;
 
+  // Save control signals
+  for (size_t i = 0; i < 12; ++i) {
+    control_signal_.position = desired_state_.acceleration;
+  }
+
   // Set action feedback
   if (rt_active_goal_ && rt_active_goal_->preallocated_feedback_)
   {
@@ -665,6 +671,7 @@ update(const ros::Time& time, const ros::Duration& period)
     rt_active_goal_->preallocated_feedback_->base_rot_actual.velocities = base_rot_state_.velocity;
     rt_active_goal_->preallocated_feedback_->base_rot_desired.positions = desired_base_rot_state_.position;
     rt_active_goal_->preallocated_feedback_->base_rot_desired.velocities = desired_base_rot_state_.velocity;
+    rt_active_goal_->preallocated_feedback_->control_signal.positions = control_signal_.position;
     rt_active_goal_->setFeedback( rt_active_goal_->preallocated_feedback_ );
   }
 
@@ -952,6 +959,7 @@ publishState(const ros::Time& time)
       state_publisher_->msg_.base_rot_desired.velocities = desired_base_rot_state_.velocity;
       state_publisher_->msg_.base_rot_actual.positions = base_rot_state_.position;
       state_publisher_->msg_.base_rot_actual.velocities = base_rot_state_.velocity;
+      state_publisher_->msg_.control_signal.positions = control_signal_.position;
       state_publisher_->unlockAndPublish();
     }
   }
