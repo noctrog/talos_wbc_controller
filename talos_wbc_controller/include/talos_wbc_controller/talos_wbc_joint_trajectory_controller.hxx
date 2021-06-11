@@ -60,6 +60,9 @@ starting(const ros::Time& time)
   solver_->SetContactFamily("right_sole_link",
 			    {"right_sole_front_left_link", "right_sole_front_right_link",
 			     "right_sole_back_left_link", "right_sole_back_right_link"});
+
+  solver_->SetDesiredFrameOrientation("left_sole_link", {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
+  solver_->SetDesiredFrameOrientation("right_sole_link", {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>
@@ -316,6 +319,7 @@ bool JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_JOINT);
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_COM);
   solver_->PushTask(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION);
+  solver_->PushTask(QpFormulation::TaskName::FOLLOW_ORIENTATION);
 
   const double Kpj = 30000.0, Kpc = 40000.0, Kpb = 10000.0;
   const double wj = 0.5, wc = 0.5, wb = 0.0;
@@ -582,6 +586,7 @@ update(const ros::Time& time, const ros::Duration& period)
   solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_JOINT, SolverWeights_.joint_task_weight);
   solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_COM, SolverWeights_.com_task_weight);
   solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION, SolverWeights_.base_orientation_task_weight);
+  solver_->SetTaskWeight(QpFormulation::TaskName::FOLLOW_ORIENTATION, SolverWeights_.base_orientation_task_weight);
   // Set the robot state
   solver_->SetRobotState(base_pos, base_vel, current_state_.position,
                          current_state_.velocity,
@@ -1072,6 +1077,7 @@ void JointTrajectoryWholeBodyController<SegmentImpl, HardwareInterface, Hardware
   BaseOriTaskDynamics_.Kv = 2 * std::sqrt(new_kp);
   using namespace talos_wbc_controller;
   solver_->SetTaskDynamics(QpFormulation::TaskName::FOLLOW_BASE_ORIENTATION, BaseOriTaskDynamics_.Kp, BaseOriTaskDynamics_.Kv);
+  solver_->SetTaskDynamics(QpFormulation::TaskName::FOLLOW_ORIENTATION, BaseOriTaskDynamics_.Kp, BaseOriTaskDynamics_.Kv);
 }
 
 template <class SegmentImpl, class HardwareInterface, class HardwareAdapter>

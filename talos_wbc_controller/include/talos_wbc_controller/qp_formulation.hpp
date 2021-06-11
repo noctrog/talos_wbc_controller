@@ -21,6 +21,7 @@ public:
     FOLLOW_JOINT = 0,
     FOLLOW_COM,
     FOLLOW_BASE_ORIENTATION,
+    FOLLOW_ORIENTATION,
     TOTAL_TASKS
   };
 
@@ -52,6 +53,8 @@ public:
   typedef std::vector<double> ComAcc;
   typedef std::vector<double> BaseRot;
   typedef std::vector<double> BaseAngVel;
+  typedef std::vector<double> FrameRot;
+  typedef std::vector<double> FrameAngVel;
   // Robot feedback
   typedef std::vector<double> PosErrors;
   typedef std::vector<double> VelErrors;
@@ -63,9 +66,11 @@ public:
   typedef pinocchio::Data Data;
   typedef std::shared_ptr<Model> ModelPtr;
   typedef std::shared_ptr<Data> DataPtr;
+  typedef std::string FrameName;
+  typedef std::vector<FrameName> FrameNameList;
   // Contacts
-  typedef std::string ContactName;
-  typedef std::vector<ContactName> ContactNameList;
+  typedef FrameName ContactName;
+  typedef FrameNameList ContactNameList;
   typedef Eigen::Matrix3d ContactOrientation;
   typedef std::vector<ContactOrientation> ContactOrientationList;
   struct ContactFamily {
@@ -79,13 +84,21 @@ public:
     }
   };
   typedef std::vector<ContactFamily> ContactFamilyList;
-
   struct Contact {
     ContactName contact_name;
     ContactOrientation contact_orientation;
     std::vector<int> contact_frames_ids;
   };
   typedef std::vector<Contact> ContactList;
+
+  typedef int FrameId;
+  struct OrientationState {
+    Eigen::Vector3d orientation;
+    Eigen::Vector3d angular_vel;
+  };
+  // typedef std::map<FrameId, OrientationState, std::less<FrameId>,
+  // 		   Eigen::aligned_allocator<std::pair<const FrameId, OrientationState>>> DesiredOrientations;
+  typedef std::map<FrameId, OrientationState> DesiredOrientations;
 
   QpFormulation(const std::string& urdf_path);
   virtual ~QpFormulation() = default;
@@ -176,6 +189,21 @@ public:
    * @brief Sets the desired base_link orientation.
    */
   void SetDesiredBaseOrientation(const BaseRot& base_rot, const BaseAngVel& base_ang_vel);
+
+  /**
+   * @brief Sets the desired orientation for @ref frame_name.
+   *
+   * The desired orientation is persistant. It can be erased with @ref
+   * EraseDesiredFrameOrientation.
+   */
+  void SetDesiredFrameOrientation(const std::string& frame_name, const FrameRot& frame_rot,
+				  const FrameAngVel& frame_ang_vel);
+
+  /**
+   * @brief Erases a desired frame orientation previously added with
+   * @ref SetDesiredFrameOrientation.
+   */
+  void EraseDesiredFrameOrientation(const std::string& frame_name);
 
   /**
    * @brief Sets the dynamic constants of the specified task.
@@ -373,6 +401,9 @@ private:
   ContactJacobians contact_jacobians_;
   ContactList contacts_;
   double mu_; /// Friction coeficient
+
+  // Frame orientation task
+  DesiredOrientations desired_orientations_;
 
   // Base link jacobian
   Eigen::MatrixXd base_link_jacobian_;

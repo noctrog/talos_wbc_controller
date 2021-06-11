@@ -1,5 +1,6 @@
 #include <types.h>
 #include <functional>
+#include <utility>
 
 #include <talos_wbc_controller/qp_formulation.hpp>
 
@@ -10,9 +11,9 @@
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/algorithm/crba.hpp>
 #include <pinocchio/algorithm/rnea.hpp>
-#include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/kinematics-derivatives.hpp>
+#include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/center-of-mass-derivatives.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
@@ -221,6 +222,41 @@ namespace talos_wbc_controller {
   }
 
   void
+  QpFormulation::SetDesiredFrameOrientation(const std::string& frame_name, const FrameRot& frame_rot,
+					    const FrameAngVel& frame_ang_vel)
+  {
+    // Retrieve the frame id
+    const int frame_id = model_->getFrameId(frame_name);
+    // Only insert if the frame and vectors are valid
+    if (frame_id < model_->frames.size() && frame_rot.size() == 3 && frame_ang_vel.size() == 3) {
+      // Eigen::Vector3d des_frame_rot = Eigen::Vector3d::Map(frame_rot.data(), frame_rot.size());
+      // Eigen::Vector3d des_frame_vel = Eigen::Vector3d::Map(frame_ang_vel.data(), frame_ang_vel.size());
+      // Perform a copy since this is persistant
+      Eigen::Vector3d des_frame_rot, des_frame_vel;
+      des_frame_rot.x() = frame_rot[0];
+      des_frame_rot.y() = frame_rot[1];
+      des_frame_rot.z() = frame_rot[2];
+      des_frame_vel.x() = frame_ang_vel[0];
+      des_frame_vel.y() = frame_ang_vel[1];
+      des_frame_vel.z() = frame_ang_vel[2];
+
+      desired_orientations_.insert(std::make_pair(frame_id, OrientationState{.orientation = des_frame_rot,
+									     .angular_vel = des_frame_vel}));
+    }
+  }
+
+  void
+  QpFormulation::EraseDesiredFrameOrientation(const std::string& frame_name)
+  {
+    // Retrieve the frame id
+    const int frame_id = model_->getFrameId(frame_name);
+    // Only erase if the frame is valid
+    if (frame_id < model_->frames.size()) {
+      desired_orientations_.erase(frame_id);
+    }
+  }
+
+  void
   QpFormulation::SetPositionErrors(const PosErrors& ep)
   {
     ep_ = ep;
@@ -296,6 +332,24 @@ namespace talos_wbc_controller {
 	P_ += P_orientation_task * GetTaskWeight(task);
 	break;
       }
+      case TaskName::FOLLOW_ORIENTATION: {
+	Eigen::SparseMatrix<double> P_orientation_task(cols, cols);
+	Eigen::MatrixXd JtJ_sum(model_->nv, model_->nv);
+	for (const auto& p : desired_orientations_) {
+	  // Compute frame jacobian
+	  const int id = p.first;
+	  Eigen::MatrixXd J(6, model_->nv); J.setZero();
+	  pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
+					  pinocchio::ReferenceFrame::WORLD,
+					  J);
+	  std::cout << "J:\n" << J << std::endl;
+	  JtJ_sum += J.transpose() * J;
+	}
+
+	std::cout << "JtJ_sum: \n" << JtJ_sum << std::endl;
+	insert_in_sparse(P_orientation_task, JtJ_sum, 0, 0);
+	P_ += P_orientation_task * GetTaskWeight(task);
+      }
       default:
 	std::runtime_error("Task hessian matrix not implemented!");
       }
@@ -361,6 +415,53 @@ namespace talos_wbc_controller {
 	q_base << q_aux, Eigen::VectorXd::Constant(cols - q_aux.size(), 0.0);
 	g_ += q_base * GetTaskWeight(task);
 	break;
+      }
+      case TaskName::FOLLOW_ORIENTATION: {
+	Eigen::SparseMatrix<double> P_orientation_task(cols, cols);
+	Eigen::VectorXd grad_sum(model_->nv);
+	Eigen::VectorXd q_base(cols);
+	for (const auto& p : desired_orientations_) {
+	  // Compute frame jacobian
+	  const int id = p.first;
+	  Eigen::MatrixXd J(6, model_->nv); J.setZero();
+	  pinocchio::computeFrameJacobian(*model_, *data_, q_, id,
+					  pinocchio::ReferenceFrame::WORLD,
+					  J);
+	  J = J.block(3, 0, 3, model_->nv);
+
+	  // Compute the current gradient vector
+	  // TODO this is ugly
+	  const auto& desired_rot = p.second.orientation;
+	  const auto& desired_angvel = p.second.angular_vel;
+	  Eigen::Matrix3d R = data_->oMf[id].rotation();
+	  const Eigen::Matrix3d dR = Eigen::AngleAxisd(desired_rot(0), Eigen::Vector3d::UnitX()) *
+	    Eigen::AngleAxisd(desired_rot(1), Eigen::Vector3d::UnitY()) *
+	    Eigen::AngleAxisd(desired_rot(2), Eigen::Vector3d::UnitZ()) * R.transpose();
+	  const Eigen::Vector3d ep = 0.5 * Eigen::Vector3d {dR(0, 1) - dR(1, 2),
+							    dR(0, 2) - dR(2, 0),
+							    dR(1, 0) - dR(2, 1)};
+	  const auto veltlp = pinocchio::getFrameVelocity(*model_, *data_,
+							  id, pinocchio::ReferenceFrame::WORLD);
+	  const Eigen::Vector3d current_angvel(veltlp.angular().x(),
+					       veltlp.angular().y(),
+					       veltlp.angular().z());
+	  const Eigen::Vector3d ev = desired_angvel - current_angvel;
+	  GetTaskDynamics(task, Kp, Kv);
+	  const Eigen::VectorXd q_aux = -(/*-dJqd*/ + Kp * ep + Kv * ep).transpose() * J;
+
+	  grad_sum += q_aux;
+
+	  std::cout << "q_aux: " << q_aux.transpose() << std::endl;
+	}
+
+	Eigen::VectorXd qbase(cols);
+	qbase << grad_sum, Eigen::VectorXd::Constant(cols - grad_sum.size(), 0.0);
+
+	std::cout << "grad_sum: " << grad_sum.transpose() << std::endl;
+	
+	g_ += qbase * GetTaskWeight(task);
+
+	std::cout << "g_: " << g_.transpose() << std::endl;
       }
       default:
 	std::runtime_error("Task gradient matrix not implemented!");
