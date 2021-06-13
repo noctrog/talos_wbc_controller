@@ -419,7 +419,7 @@ namespace talos_wbc_controller {
       }
       case TaskName::FOLLOW_ORIENTATION: {
 	Eigen::SparseMatrix<double> P_orientation_task(cols, cols);
-	Eigen::VectorXd grad_sum(model_->nv);
+	Eigen::VectorXd grad_sum = Eigen::VectorXd::Constant(model_->nv, 0.0);
 	Eigen::VectorXd q_base(cols);
 	for (const auto& p : desired_orientations_) {
 	  // Compute frame jacobian
@@ -451,18 +451,12 @@ namespace talos_wbc_controller {
 	  const Eigen::VectorXd q_aux = -(/*-dJqd*/ + Kp * ep + Kv * ep).transpose() * J;
 
 	  grad_sum += q_aux;
-
-	  std::cout << "q_aux: " << q_aux.transpose() << std::endl;
 	}
 
 	Eigen::VectorXd qbase(cols);
 	qbase << grad_sum, Eigen::VectorXd::Constant(cols - grad_sum.size(), 0.0);
-
-	std::cout << "grad_sum: " << grad_sum.transpose() << std::endl;
 	
 	g_ += qbase * GetTaskWeight(task);
-
-	std::cout << "g_: " << g_.transpose() << std::endl;
       }
       default:
 	std::runtime_error("Task gradient matrix not implemented!");
