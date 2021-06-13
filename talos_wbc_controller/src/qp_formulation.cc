@@ -335,6 +335,7 @@ namespace talos_wbc_controller {
       case TaskName::FOLLOW_ORIENTATION: {
 	Eigen::SparseMatrix<double> P_orientation_task(cols, cols);
 	Eigen::MatrixXd JtJ_sum(model_->nv, model_->nv);
+	JtJ_sum.setZero();
 	for (const auto& p : desired_orientations_) {
 	  // Compute frame jacobian
 	  const int id = p.first;
