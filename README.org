@@ -3,8 +3,8 @@
 This is an attempt to create a simple Whole Body Controller from
 scratch. The controller is highly inspired from the works:
 
-- Bouyarmane, K., Caron, St\’ephane, Escande, A., & Kheddar, A., Multi-contact motion planning and control, In A. Goswami, & P. Vadakkepat (Eds.), Humanoid Robotics: A Reference (pp. 1763–1804) (2019). Dordrecht: Springer Netherlands.
-- Salini, J., Barth\’elemy, S\’ebastien, Bidaud, P., & Padois, V., Whole-body motion synthesis with lqp-based controller -- application to icub, In K. Mombaur, & K. Berns (Eds.), Modeling, Simulation and Optimization of Bipedal Walking (pp. 199–210) (2013). Berlin, Heidelberg: Springer Berlin Heidelberg.
+- Bouyarmane, K., Caron, Stéphane, Escande, A., & Kheddar, A., Multi-contact motion planning and control, In A. Goswami, & P. Vadakkepat (Eds.), Humanoid Robotics: A Reference (pp. 1763–1804) (2019). Dordrecht: Springer Netherlands.
+- Salini, J., Barthélemy, S\’ebastien, Bidaud, P., & Padois, V., Whole-body motion synthesis with lqp-based controller -- application to icub, In K. Mombaur, & K. Berns (Eds.), Modeling, Simulation and Optimization of Bipedal Walking (pp. 199–210) (2013). Berlin, Heidelberg: Springer Berlin Heidelberg.
 
 This controller makes use of the excellent [[https://github.com/oxfordcontrol/osqp][osqp]] QP solver and the
 [[https://github.com/robotology/osqp-eigen][osqp-eigen]] C++ interface.
