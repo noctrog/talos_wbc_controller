@@ -3,3 +3,4 @@ trajectory_msgs/JointTrajectory trajectory
 trajectory_msgs/JointTrajectory com_trajectory
 string[] contact_link_names
 JointContactTrajectoryContacts[] contacts
+trajectory_msgs/JointTrajectory[] contacts_cart

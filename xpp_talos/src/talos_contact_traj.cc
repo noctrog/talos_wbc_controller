@@ -143,6 +143,32 @@ CurrentContacts GetCurrentContact(const xpp_msgs::RobotStateCartesian::ConstPtr 
 }
 
 /**
+ * Takes a RobotStateCartesian and retrieves the robot's end effector's
+ * positions, velocities and accelerations.
+ */
+void GetFeetState(const xpp_msgs::RobotStateCartesian::ConstPtr i,
+		  Eigen::Vector3d& left_foot_pos, Eigen::Vector3d& left_foot_vel,
+		  Eigen::Vector3d& left_foot_acc, Eigen::Vector3d& right_foot_pos,
+		  Eigen::Vector3d& right_foot_vel, Eigen::Vector3d& right_foot_acc)
+{
+  const auto cart = xpp::Convert::ToXpp(*i);
+  const auto n_ee = cart.ee_motion_.GetEECount();
+
+  if (n_ee != 2) {
+    std::cerr << "The robot must have 2 legs!\n";
+    exit(-1);
+  }
+
+  left_foot_pos = cart.ee_motion_.at(0).p_;
+  left_foot_vel = cart.ee_motion_.at(0).v_;
+  left_foot_acc = cart.ee_motion_.at(0).a_;
+
+  right_foot_pos = cart.ee_motion_.at(1).p_;
+  right_foot_vel = cart.ee_motion_.at(1).v_;
+  right_foot_acc = cart.ee_motion_.at(1).a_;
+}
+
+/**
  * Takes a trajectory msg and assigns the corresponding joints for
  * both legs
  */
@@ -168,6 +194,15 @@ void PrepareTrajMsg(talos_wbc_controller::JointContactTrajectory &msg) {
   msg.com_trajectory.joint_names.emplace_back("center_of_mass_x");
   msg.com_trajectory.joint_names.emplace_back("center_of_mass_y");
   msg.com_trajectory.joint_names.emplace_back("center_of_mass_z");
+
+  // End effectors cartesian trajectories
+  msg.contacts_cart.resize(2);
+  msg.contacts_cart[0].joint_names.emplace_back("left_sole_link_x");
+  msg.contacts_cart[0].joint_names.emplace_back("left_sole_link_y");
+  msg.contacts_cart[0].joint_names.emplace_back("left_sole_link_z");
+  msg.contacts_cart[1].joint_names.emplace_back("right_sole_link_x");
+  msg.contacts_cart[1].joint_names.emplace_back("right_sole_link_y");
+  msg.contacts_cart[1].joint_names.emplace_back("right_sole_link_z");
 
   // Contact names
   msg.contact_link_names.emplace_back("left_sole_link");
@@ -223,8 +258,12 @@ int main(int argc, char *argv[]) {
       // Perform inverse kinematics
       Eigen::VectorXd q, qd, qdd;
       Eigen::Vector3d com_pos, com_vel, com_acc;
+      Eigen::Vector3d left_foot_pos, left_foot_vel, left_foot_acc;
+      Eigen::Vector3d right_foot_pos, right_foot_vel, right_foot_acc;
       GetJointStates(i, ik, q, qd, qdd);
       GetCenterOfMassState(i, ik, q, qd, qdd, com_pos, com_vel, com_acc);
+      GetFeetState(i, left_foot_pos, left_foot_vel, left_foot_acc,
+		   right_foot_pos, right_foot_vel, right_foot_acc);
 
       // Calculate corresponding time for position
       traj.trajectory.points.emplace_back();
@@ -243,6 +282,21 @@ int main(int argc, char *argv[]) {
 	traj.com_trajectory.points.back().positions.push_back(com_pos(i));
 	traj.com_trajectory.points.back().velocities.push_back(com_vel(i));
 	traj.com_trajectory.points.back().accelerations.push_back(com_acc(i));
+      }
+
+      // End effector cartesian trajectories
+      traj.contacts_cart[0].points.emplace_back();
+      traj.contacts_cart[0].points.back().time_from_start = i->time_from_start;
+      traj.contacts_cart[1].points.emplace_back();
+      traj.contacts_cart[1].points.back().time_from_start = i->time_from_start;
+      for (int i = 0; i < 3; ++i) {
+	traj.contacts_cart[0].points.back().positions.push_back(left_foot_pos(i));
+	traj.contacts_cart[0].points.back().velocities.push_back(left_foot_vel(i));
+	traj.contacts_cart[0].points.back().accelerations.push_back(left_foot_acc(i));
+
+	traj.contacts_cart[1].points.back().positions.push_back(right_foot_pos(i));
+	traj.contacts_cart[1].points.back().velocities.push_back(right_foot_vel(i));
+	traj.contacts_cart[1].points.back().accelerations.push_back(right_foot_acc(i));
       }
 
       // Add values to the contact sequence
