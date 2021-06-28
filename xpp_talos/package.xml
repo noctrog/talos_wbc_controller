@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>xpp_talos</name>
+  <version>0.0.0</version>
+  <description>The xpp_talos package</description>
+
+  <maintainer email="ramon@ramoncalvo.com">Ramón Calvo González</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>xacro</build_depend>
+  <build_depend>xpp_vis</build_depend>
+  <build_depend>rosbag</build_depend>
+  <build_depend>talos_wbc_controller</build_depend>
+  <build_depend>trajectory_msgs</build_depend>
+  <build_depend>pinocchio</build_depend>
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>xacro</build_export_depend>
+  <build_export_depend>xpp_vis</build_export_depend>
+  <build_export_depend>pinocchio</build_export_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>xpp_vis</exec_depend>
+  <exec_depend>talos_wbc_controller</exec_depend>
+  <exec_depend>pinocchio</exec_depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
