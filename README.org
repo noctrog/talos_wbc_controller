@@ -9,7 +9,7 @@ scratch. The controller is highly inspired from the works:
 This controller makes use of the excellent [[https://github.com/oxfordcontrol/osqp][osqp]] QP solver and the
 [[https://github.com/robotology/osqp-eigen][osqp-eigen]] C++ interface.
 
-https://i.imgur.com/I1svniP.gif
+#+html: <p align="center"><img src="https://i.imgur.com/I1svniP.gif" /></p>
 
 * How to use
 
