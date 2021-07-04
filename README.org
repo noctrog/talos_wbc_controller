@@ -13,13 +13,43 @@ This controller makes use of the excellent [[https://github.com/oxfordcontrol/os
 
 * How to use
 
-** Dependencies
+** Docker
+
+This repository ships with a =Dockerfile= to create a fully functional
+image ready to be used. To create it, run this command while being
+inside this repo:
+
+#+begin_src bash
+  docker build -t ros_talos .
+#+end_src
+
+This will create an image with the name =ros_talos=. To launch it, do
+it with the script provided:
+
+#+begin_src bash
+  ./run_container.sh
+#+end_src
+
+This script includes this repo inside the catkin workspace. That way
+you can modify the controller from the host. You may need to run these
+commands with =sudo=, depending on how =docker= is set up in your
+machine.
+
+To access the container, open your browser and go to
+=localhost:6080=. You should be able to view the container's desktop
+after a few seconds.
+
+Read the [[Compiling]] and [[How to use]] sections to learn how to compile the
+workspace and run the controller inside a simulation.
+
+** Raw installation
+*** Dependencies
 
 - ROS Melodic (tested on Debian 9).
 - PAL Robotics' Talos ROS packages: http://wiki.ros.org/Robots/TALOS/Tutorials/Installation/Simulation
 - Pinocchio (do not install =ros-melodic-pinocchio=): https://stack-of-tasks.github.io/pinocchio/download.html
 
-** Compiling
+*** Compiling
 
 Make sure you have the package =python-catkin-tools= installed. Then, in your catkin workspace, run:
 
@@ -27,7 +57,7 @@ Make sure you have the package =python-catkin-tools= installed. Then, in your ca
   catkin build --force-cmake -DCATKIN_ENABLE_TESTING=false
 #+end_src
 
-** How to use
+*** How to use
 
 The first step is to launch the Gazebo physics simulator:
 
@@ -57,3 +87,4 @@ Trajectories can be generated in advance using any planning
 framework. Using my fork of [[https://github.com/noctrog/towr][towr]] and the package [[https://github.com/noctrog/xpp_talos][xpp_talos]], simple
 walking gaits can be generated and sent to this controller (TODO
 explain how).
+
