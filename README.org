@@ -39,7 +39,7 @@ To access the container, open your browser and go to
 =localhost:6080=. You should be able to view the container's desktop
 after a few seconds.
 
-Read the [[Compiling]] and [[How to use]] sections to learn how to compile the
+Read the [[https://github.com/noctrog/talos_wbc_controller#compiling][Compiling]] and [[https://github.com/noctrog/talos_wbc_controller#how-to-use-1][How to use]] sections to learn how to compile the
 workspace and run the controller inside a simulation.
 
 ** Raw installation
