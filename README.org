@@ -11,7 +11,7 @@ This controller makes use of the excellent [[https://github.com/oxfordcontrol/os
 
 #+html: <p align="center"><img src="https://i.imgur.com/I1svniP.gif" /></p>
 
-* How to use
+* Installation
 
 ** Docker
 
@@ -42,14 +42,20 @@ after a few seconds.
 Read the [[https://github.com/noctrog/talos_wbc_controller#compiling][Compiling]] and [[https://github.com/noctrog/talos_wbc_controller#how-to-use-1][How to use]] sections to learn how to compile the
 workspace and run the controller inside a simulation.
 
-** Raw installation
-*** Dependencies
+** Raw
 
-- ROS Melodic (tested on Debian 9).
-- PAL Robotics' Talos ROS packages: http://wiki.ros.org/Robots/TALOS/Tutorials/Installation/Simulation
-- Pinocchio (do not install =ros-melodic-pinocchio=): https://stack-of-tasks.github.io/pinocchio/download.html
+The raw installation was tested on Debian Stretch (9), using ROS
+Melodic. Install the Talos simulation environment from the oficial [[http://wiki.ros.org/Robots/TALOS/Tutorials/Installation/Simulation][ROS
+page]]. Also, you will need to install the Pinocchio library. To do so,
+follow [[https://stack-of-tasks.github.io/pinocchio/download.html][these instructions]]. Also, do not forget to clone this repo
+inside your workspace!
 
-*** Compiling
+Alternatively, you can have a look to the =Dockerfile= and use it as a
+reference, but that should not be necessary.
+
+* How to use
+
+** Compiling
 
 Make sure you have the package =python-catkin-tools= installed. Then, in your catkin workspace, run:
 
@@ -57,13 +63,15 @@ Make sure you have the package =python-catkin-tools= installed. Then, in your ca
   catkin build --force-cmake -DCATKIN_ENABLE_TESTING=false
 #+end_src
 
-*** How to use
+** Simulation
 
 The first step is to launch the Gazebo physics simulator:
 
 #+begin_src bash
   roslaunch talos_gazebo talos_gazebo.launch
 #+end_src
+
+** Controller
 
 We can now load our controller:
 
@@ -83,8 +91,33 @@ The controller is waiting for trajectories to be sent to the
 =talos_wbc_controller::JointContactTrajectory=, and can send joint and
 center of mass trajectories, as well as link contacts with the world.
 
-Trajectories can be generated in advance using any planning
-framework. Using my fork of [[https://github.com/noctrog/towr][towr]] and the package [[https://github.com/noctrog/xpp_talos][xpp_talos]], simple
-walking gaits can be generated and sent to this controller (TODO
-explain how).
+** Generate trajectories
 
+Trajectories can be generated in advance using any planning
+framework. Those trajectories then have to be formulated as a
+=JointContactTrajectory=.
+
+Using this fork of [[https://github.com/noctrog/towr][towr]] and the package =xpp_talos=, simple
+walking gaits can be generated and sent to this controller. This
+trajectory generator is already installed in the Docker image. If
+using a raw installation, you'll have to clone it in the workspace and
+build it. To launch the trajectory generator environment, run:
+
+#+begin_src bash
+  roslaunch towr_ros towr_ros.launch
+#+end_src
+
+By default, the trajectory generated will have only two steps, one for
+each foot. So it is a good idea to have the goal moved near the
+initial position of the robot.
+
+Every trajectory generated is automatically saved to
+=~/.ros/towr_trajectory.bag=. To send the trajectory to the
+controller, use the node =talos_contact_traj= as follows:
+
+#+begin_src bash
+  rosrun xpp_talos talos_contact_traj
+#+end_src
+
+You should be able to see the robot trying to follow the trajectory in
+Gazebo.
