@@ -609,8 +609,6 @@ update(const ros::Time& time, const ros::Duration& period)
 
   // Giro eje X
   auto desired_rot   = typename Segment::State(3);
-  desired_rot.position[0] = 0.7 * std::cos(ros::Time::now().toSec() / 2.0);
-  desired_rot.velocity[0] = -0.7 * std::sin(ros::Time::now().toSec() / 2.0);
   
   solver_->SetDesiredBaseOrientation(desired_rot.position, desired_rot.velocity);
   // solver_->SetDesiredBaseOrientation({ 0.0, 0.0, 0.0}, { 0.0, 0.0, 0.0});
